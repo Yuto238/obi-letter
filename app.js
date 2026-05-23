@@ -282,6 +282,7 @@ function render(route = location.hash.replace('#', '') || 'home') {
   };
 
   binders[route]?.();
+  bindRevealEffects();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -294,6 +295,29 @@ function bindCommonRoutes() {
   document.querySelectorAll('[data-route]').forEach((el) => {
     el.addEventListener('click', () => navigate(el.dataset.route));
   });
+}
+
+function bindRevealEffects() {
+  const targets = document.querySelectorAll('#app .reveal, #app .feature-card, #app .step-card, #app .safety-card, #app .choice-card, #app .floating-envelope, #app .envelope, #app .ops-card, #app .stat-card, #app .notice');
+  if (!targets.length) {
+    return;
+  }
+
+  if (typeof IntersectionObserver === 'undefined') {
+    targets.forEach((target) => target.classList.add('is-visible'));
+    return;
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.15 });
+
+  targets.forEach((target) => observer.observe(target));
 }
 
 document.querySelectorAll('[data-route]').forEach((el) => {
@@ -350,6 +374,18 @@ function bindHome() {
   changeBtn.addEventListener('click', () => {
     input.value = getCurrentUsername();
     showInputState();
+  });
+
+  document.querySelectorAll('[data-scroll-to]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const target = document.querySelector(`#${button.dataset.scrollTo}`);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  document.querySelector('[data-scroll-down]')?.addEventListener('click', () => {
+    const target = document.querySelector('#overview');
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 }
 
