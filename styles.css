@@ -883,6 +883,99 @@ h3 { margin: 0 0 .45rem; line-height: 1.25; }
   margin: 0 0 1rem;
 }
 
+.rank-summary-card {
+  margin: 0 auto 1rem;
+  padding: .8rem .95rem;
+  border: 1px solid rgba(216, 203, 184, .95);
+  border-radius: 14px;
+  background: rgba(255, 252, 246, .9);
+  max-width: 520px;
+  text-align: left;
+}
+
+.rank-summary-inline {
+  margin: .3rem 0 .6rem;
+  max-width: 620px;
+}
+
+.rank-line {
+  margin: .2rem 0;
+}
+
+.rank-next {
+  margin: .45rem 0 0;
+  font-size: .9rem;
+  color: var(--color-muted);
+}
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(216, 203, 184, .95);
+  border-radius: 999px;
+  padding: .2rem .6rem;
+  font-size: .82rem;
+  letter-spacing: .03em;
+  font-weight: 700;
+}
+
+.rank-normal {
+  background: rgba(241, 238, 232, .95);
+  color: #5e5951;
+  border-color: rgba(179, 172, 162, .8);
+}
+
+.rank-bronze {
+  background: rgba(198, 160, 125, .2);
+  color: #6a4a2f;
+  border-color: rgba(149, 102, 66, .48);
+}
+
+.rank-silver {
+  background: rgba(204, 209, 216, .32);
+  color: #4f5862;
+  border-color: rgba(118, 127, 137, .48);
+}
+
+.rank-gold {
+  background: rgba(193, 167, 84, .24);
+  color: #6d5818;
+  border-color: rgba(152, 127, 47, .52);
+}
+
+.rank-progress-box {
+  margin: 1rem auto 1.2rem;
+  max-width: 620px;
+  text-align: left;
+  border: 1px solid rgba(216, 203, 184, .95);
+  border-radius: 14px;
+  padding: .85rem .95rem;
+  background: rgba(255, 252, 246, .9);
+}
+
+.rank-progress-box p {
+  margin: .25rem 0;
+}
+
+.rank-up-note {
+  margin-top: .5rem;
+  color: #7f3d4c;
+  font-weight: 700;
+}
+
+.rank-note-block {
+  margin: 1rem 0;
+  padding: .9rem 1rem;
+  border: 1px dashed rgba(166, 134, 45, .45);
+  border-radius: 16px;
+  background: rgba(255, 249, 236, .7);
+}
+
+.rank-note-block h2 {
+  font-size: 1.15rem;
+  margin-bottom: .35rem;
+}
+
 .error-message {
   color: var(--color-danger);
   font-weight: 700;
@@ -907,6 +1000,14 @@ h3 { margin: 0 0 .45rem; line-height: 1.25; }
 .admin-stats {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-bottom: 1rem;
+}
+
+.admin-rank-summary {
+  margin-bottom: 1rem;
+}
+
+.rank-aggregate-card h3 {
+  margin-bottom: .5rem;
 }
 
 .stat-card h2 {

@@ -68,6 +68,11 @@
         <!-- ユーザー名入力済み時 -->
         <div id="username-active-area" class="username-area username-active reveal" hidden>
           <p class="username-greeting" id="username-greeting"></p>
+          <div class="rank-summary-card" id="home-rank-summary">
+            <p class="rank-line">称号：<span id="username-rank-label"></span></p>
+            <p class="rank-line">書いた手紙：<span id="username-letter-count"></span>枚</p>
+            <p class="rank-next" id="username-next-rank"></p>
+          </div>
           <div class="hero-actions">
             <button class="primary ribbon-button" data-route="write">手紙を書く</button>
             <button class="secondary ribbon-button ribbon-button-ghost" data-route="receive">手紙を受け取る</button>
@@ -272,6 +277,8 @@
       <p class="section-code">08 / LETTER BOX</p>
       <h1>手紙箱</h1>
       <p>あなたが受け取った手紙を保存しています。返信ではなく、自分だけの読後メモを残せます。</p>
+      <div class="rank-summary-card rank-summary-inline" id="box-rank-summary"></div>
+      <p class="hint" id="box-rank-note"></p>
       <p class="hint" id="box-receiver-name"></p>
       <div id="box-list" class="letter-list"></div>
     </section>
@@ -291,6 +298,17 @@
         <li>困った手紙が届いた場合は、運営に相談できる。</li>
       </ul>
       <p class="hint">初期版では、運営が手紙を確認してから配達する想定です。</p>
+      <section class="rank-note-block">
+        <h2>称号について</h2>
+        <p>OBI LETTERSでは、これまでに書いた手紙の枚数に応じて、静かな称号がつきます。</p>
+        <ul class="rule-list">
+          <li>ノーマル会員：0〜9枚</li>
+          <li>ブロンズ会員：10〜29枚</li>
+          <li>シルバー会員：30〜49枚</li>
+          <li>ゴールド会員：50枚以上</li>
+        </ul>
+        <p class="hint">これはランキングではありません。誰かと競うための数字ではなく、あなたの読後の手紙が積み重なっていく記録です。</p>
+      </section>
       <p class="hint muted-note">このサービスは、専門的な相談や緊急の支援を行う場所ではありません。深刻な悩みや危険がある場合は、身近な人や専門機関に相談してください。</p>
     </section>
   </template>
@@ -331,6 +349,7 @@
       </div>
 
       <section class="admin-stats" id="admin-stats"></section>
+      <section class="admin-rank-summary" id="admin-rank-summary"></section>
 
       <section class="admin-panel">
         <h2>手紙を探す</h2>

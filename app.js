@@ -2,6 +2,7 @@ const app = document.querySelector('#app');
 
 const STORAGE_KEYS = {
   letters: 'dokugo_letters',
+  replyBookLetters: 'dokugo_reply_book_letters',
   received: 'dokugo_received',
   reports: 'dokugo_reports',
   receiverName: 'dokugo_receiver_name',
@@ -196,6 +197,157 @@ function saveUsers(users) {
   setData(STORAGE_KEYS.users, users);
 }
 
+function getUserRank(letterCount) {
+  if (letterCount >= 50) {
+    return {
+      key: 'gold',
+      label: 'ゴールド会員',
+      description: '50枚以上の手紙を書いた読み手です。',
+    };
+  }
+
+  if (letterCount >= 30) {
+    return {
+      key: 'silver',
+      label: 'シルバー会員',
+      description: '30枚以上の手紙を書いた読み手です。',
+    };
+  }
+
+  if (letterCount >= 10) {
+    return {
+      key: 'bronze',
+      label: 'ブロンズ会員',
+      description: '10枚以上の手紙を書いた読み手です。',
+    };
+  }
+
+  return {
+    key: 'normal',
+    label: 'ノーマル会員',
+    description: '読後の手紙を書きはじめた読み手です。',
+  };
+}
+
+function getNextRankInfo(letterCount) {
+  if (letterCount < 10) {
+    return {
+      nextLabel: 'ブロンズ会員',
+      remaining: 10 - letterCount,
+    };
+  }
+
+  if (letterCount < 30) {
+    return {
+      nextLabel: 'シルバー会員',
+      remaining: 30 - letterCount,
+    };
+  }
+
+  if (letterCount < 50) {
+    return {
+      nextLabel: 'ゴールド会員',
+      remaining: 50 - letterCount,
+    };
+  }
+
+  return {
+    nextLabel: null,
+    remaining: 0,
+  };
+}
+
+function isCountTargetStatus(status) {
+  const s = String(status || LETTER_STATUS.pending);
+  return [LETTER_STATUS.pending, LETTER_STATUS.published, LETTER_STATUS.onHold, LETTER_STATUS.private].includes(s);
+}
+
+function getAllLettersForCount() {
+  const normalizedLetters = loadLetters();
+  const legacyReply = getData(STORAGE_KEYS.replyBookLetters, []).map(normalizeLetter);
+  const merged = [...normalizedLetters, ...legacyReply];
+  const uniq = new Map();
+
+  merged.forEach((letter) => {
+    const key = letter.id || `${letter.type}-${letter.createdAt}-${letter.senderName}`;
+    if (!uniq.has(key)) {
+      uniq.set(key, letter);
+    }
+  });
+
+  return [...uniq.values()];
+}
+
+function isLetterWrittenByUser(letter, user) {
+  const userId = String(user?.id || '').trim();
+  const username = String(user?.username || '').trim();
+  const letterUserId = String(letter?.currentUserId || '').trim();
+  const letterUsername = String(letter?.currentUsername || '').trim();
+
+  if (userId && letterUserId) {
+    return letterUserId === userId;
+  }
+
+  if (username && letterUsername) {
+    return letterUsername === username;
+  }
+
+  return false;
+}
+
+function getUserLetterCount(user, allLetters = null) {
+  const letters = Array.isArray(allLetters) ? allLetters : getAllLettersForCount();
+  return letters.filter((letter) => isLetterWrittenByUser(letter, user) && isCountTargetStatus(letter.status)).length;
+}
+
+function withUserRank(user, allLetters = null) {
+  const letterCount = getUserLetterCount(user, allLetters);
+  const rank = getUserRank(letterCount);
+  return {
+    ...user,
+    letterCount,
+    rankKey: rank.key,
+    rankLabel: rank.label,
+    rankDescription: rank.description,
+    rankUpdatedAt: new Date().toISOString(),
+  };
+}
+
+function updateUserRanks() {
+  const users = loadUsers();
+  if (!users.length) {
+    return users;
+  }
+
+  const allLetters = getAllLettersForCount();
+  const updated = users.map((user) => withUserRank(user, allLetters));
+  saveUsers(updated);
+  return updated;
+}
+
+function getCurrentUserProfile() {
+  const currentUserId = getCurrentUserId();
+  const currentUsername = getCurrentUsername();
+
+  if (!currentUserId && !currentUsername) {
+    return null;
+  }
+
+  const users = loadUsers();
+  return users.find((u) => (currentUserId && u.id === currentUserId) || (!currentUserId && u.username === currentUsername)) || null;
+}
+
+function updateCurrentUserRank() {
+  const updatedUsers = updateUserRanks();
+  const currentUserId = getCurrentUserId();
+  const currentUsername = getCurrentUsername();
+  return updatedUsers.find((u) => (currentUserId && u.id === currentUserId) || (!currentUserId && u.username === currentUsername)) || null;
+}
+
+function rankBadgeHtml(rankKey, rankLabel) {
+  return `<span class="rank-badge rank-${escapeHtml(rankKey || 'normal')}">${escapeHtml(rankLabel || 'ノーマル会員')}</span>`;
+}
+
 /**
  * ユーザー名を設定する。同名が既存なら既存ユーザーを使い、なければ新規作成する。
  * @param {string} username
@@ -225,7 +377,7 @@ function setCurrentUser(username) {
   saveUsers(users);
   localStorage.setItem(STORAGE_KEYS.currentUsername, name);
   localStorage.setItem(STORAGE_KEYS.currentUserId, user.id);
-  return user;
+  return updateCurrentUserRank() || user;
 }
 
 function clearCurrentUser() {
@@ -345,6 +497,7 @@ function ensureSeedData() {
 
   loadLetters();
   loadReports();
+  updateUserRanks();
 }
 
 function templateForRoute(route) {
@@ -416,6 +569,44 @@ document.querySelectorAll('[data-route]').forEach((el) => {
 
 window.addEventListener('hashchange', () => render());
 
+function getNextRankSentence(letterCount) {
+  const next = getNextRankInfo(letterCount);
+  if (!next.nextLabel) {
+    return '現在の最高称号です。';
+  }
+  return `次の${next.nextLabel}まで、あと${next.remaining}枚です。`;
+}
+
+function renderHomeRankSummary(profile) {
+  const rankLabelEl = document.querySelector('#username-rank-label');
+  const letterCountEl = document.querySelector('#username-letter-count');
+  const nextRankEl = document.querySelector('#username-next-rank');
+  const card = document.querySelector('#home-rank-summary');
+
+  if (!rankLabelEl || !letterCountEl || !nextRankEl || !card || !profile) {
+    return;
+  }
+
+  rankLabelEl.innerHTML = rankBadgeHtml(profile.rankKey, profile.rankLabel);
+  letterCountEl.textContent = String(profile.letterCount || 0);
+  nextRankEl.textContent = getNextRankSentence(profile.letterCount || 0);
+}
+
+function renderBoxRankSummary(profile) {
+  const summary = document.querySelector('#box-rank-summary');
+  const note = document.querySelector('#box-rank-note');
+  if (!summary || !note || !profile) {
+    return;
+  }
+
+  summary.innerHTML = `
+    <p class="rank-line">${escapeHtml(profile.username)}さん</p>
+    <p class="rank-line">称号：${rankBadgeHtml(profile.rankKey, profile.rankLabel)}</p>
+    <p class="rank-line">書いた手紙：${profile.letterCount || 0}枚</p>
+  `;
+  note.textContent = `この称号は、あなたがこれまでに書いた読後の手紙の枚数に応じて変わります。${getNextRankSentence(profile.letterCount || 0)}`;
+}
+
 function bindHome() {
   const inputArea = document.querySelector('#username-input-area');
   const activeArea = document.querySelector('#username-active-area');
@@ -429,6 +620,7 @@ function bindHome() {
     inputArea.hidden = true;
     activeArea.hidden = false;
     greeting.textContent = `${username}さんとして利用中`;
+    renderHomeRankSummary(updateCurrentUserRank());
     bindCommonRoutes();
   }
 
@@ -490,6 +682,7 @@ function bindWrite() {
 
   document.querySelector('#letter-form').addEventListener('submit', (e) => {
     e.preventDefault();
+    const beforeProfile = updateCurrentUserRank();
 
     const form = new FormData(e.target);
     const letter = {
@@ -519,7 +712,18 @@ function bindWrite() {
     letters.unshift(letter);
     saveLetters(letters);
 
-    app.innerHTML = '<section class="paper narrow center"><p class="eyebrow">Letter sent</p><h1>手紙を預かりました</h1><p>あなたの手紙は、運営室で確認されたあと、まだ名前のない誰かのもとへ向かいます。</p><div class="choice-row"><button class="primary" data-route="receive">手紙を受け取る</button><button class="secondary" data-route="shelf">封筒棚を見る</button></div></section>';
+    const afterProfile = updateCurrentUserRank();
+    const hasRankUp = beforeProfile && afterProfile && beforeProfile.rankKey !== afterProfile.rankKey;
+    const rankMessage = afterProfile
+      ? `<div class="rank-progress-box">
+          <p>これまでに書いた手紙：${afterProfile.letterCount}枚</p>
+          <p>称号：${rankBadgeHtml(afterProfile.rankKey, afterProfile.rankLabel)}</p>
+          <p class="hint">${getNextRankSentence(afterProfile.letterCount)}</p>
+          ${hasRankUp ? `<p class="rank-up-note">${escapeHtml(afterProfile.rankLabel)}になりました。あなたの読後の手紙が、${afterProfile.letterCount}枚になりました。</p>` : ''}
+        </div>`
+      : '';
+
+    app.innerHTML = `<section class="paper narrow center"><p class="eyebrow">Letter sent</p><h1>手紙を預かりました</h1><p>あなたの手紙は、運営室で確認されたあと、まだ名前のない誰かのもとへ向かいます。</p>${rankMessage}<div class="choice-row"><button class="primary" data-route="receive">手紙を受け取る</button><button class="secondary" data-route="shelf">封筒棚を見る</button></div></section>`;
     bindCommonRoutes();
   });
 }
@@ -771,6 +975,8 @@ function bindNews() {
 function bindBox() {
   if (guardUsername()) return;
 
+  renderBoxRankSummary(updateCurrentUserRank());
+
   const list = document.querySelector('#box-list');
   const received = getData(STORAGE_KEYS.received);
   const receiverHint = document.querySelector('#box-receiver-name');
@@ -803,6 +1009,7 @@ function bindLetterActions() {
   document.querySelectorAll('[data-reply-form]').forEach((formEl) => {
     formEl.addEventListener('submit', (e) => {
       e.preventDefault();
+      const beforeProfile = updateCurrentUserRank();
 
       const parentLetterId = formEl.dataset.replyForm;
       const form = new FormData(formEl);
@@ -835,7 +1042,13 @@ function bindLetterActions() {
       letters.unshift(replyLetter);
       saveLetters(letters);
 
-      alert('あなたの一冊を、手紙として送りました');
+      const afterProfile = updateCurrentUserRank();
+      const hasRankUp = beforeProfile && afterProfile && beforeProfile.rankKey !== afterProfile.rankKey;
+      const notify = hasRankUp
+        ? `${afterProfile.rankLabel}になりました。あなたの読後の手紙が、${afterProfile.letterCount}枚になりました。`
+        : `称号：${afterProfile?.rankLabel || 'ノーマル会員'} / 書いた手紙：${afterProfile?.letterCount || 0}枚`;
+
+      alert(`あなたの一冊を、手紙として送りました。\n${notify}`);
       render('box');
     });
   });
@@ -913,6 +1126,7 @@ function bindAdminLogin() {
 }
 
 function bindAdmin() {
+  updateUserRanks();
   bindAdminTabsAndFilters();
   renderAdminView();
 
@@ -1068,7 +1282,14 @@ function renderAdminTabs() {
 
 function renderAdminStats() {
   const stats = document.querySelector('#admin-stats');
+  const rankSummaryEl = document.querySelector('#admin-rank-summary');
   const counts = getAdminStatusCounts();
+  const users = updateUserRanks();
+  const rankCounts = users.reduce((acc, user) => {
+    const key = user.rankKey || 'normal';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, { normal: 0, bronze: 0, silver: 0, gold: 0 });
 
   stats.innerHTML = `
     <article class="stat-card" data-admin-summary-tab="pending"><h2>${counts[LETTER_STATUS.pending]}</h2><p>未確認の手紙</p></article>
@@ -1078,6 +1299,21 @@ function renderAdminStats() {
     <article class="stat-card" data-admin-summary-tab="deleted"><h2>${counts[LETTER_STATUS.deleted]}</h2><p>削除済みの手紙</p></article>
     <article class="stat-card" data-admin-summary-tab="reports"><h2>${counts.reports}</h2><p>相談ありの手紙</p></article>
   `;
+
+  if (rankSummaryEl) {
+    rankSummaryEl.innerHTML = `
+      <article class="ops-card rank-aggregate-card">
+        <h3>会員ランクの内訳（運営室のみ表示）</h3>
+        <div class="meta">
+          <span class="pill">ノーマル会員：${rankCounts.normal || 0}人</span>
+          <span class="pill">ブロンズ会員：${rankCounts.bronze || 0}人</span>
+          <span class="pill">シルバー会員：${rankCounts.silver || 0}人</span>
+          <span class="pill">ゴールド会員：${rankCounts.gold || 0}人</span>
+        </div>
+        <p class="hint">ランキング表示ではなく、運営上の把握のための集計です。</p>
+      </article>
+    `;
+  }
 }
 
 function renderAdminLetters() {
@@ -1230,8 +1466,8 @@ function renderAdminUsers(filterQuery = '') {
   const el = document.querySelector('#admin-users');
   if (!el) return;
 
-  const users = loadUsers();
-  const letters = loadLetters();
+  const users = updateUserRanks();
+  const letters = getAllLettersForCount();
   const reports = loadReports();
   const received = getData(STORAGE_KEYS.received, []);
 
@@ -1246,24 +1482,25 @@ function renderAdminUsers(filterQuery = '') {
   }
 
   el.innerHTML = filtered.map((user) => {
-    const userLetters = letters.filter((l) => l.currentUserId === user.id);
+    const userLetters = letters.filter((l) => isLetterWrittenByUser(l, user) && isCountTargetStatus(l.status));
     const normalLetters = userLetters.filter((l) => l.type === 'normalLetter').length;
     const replyLetters = userLetters.filter((l) => l.type === 'replyBookLetter').length;
     const userMemos = received.filter((l) => l.memoUserId === user.id && l.memo).length;
-    const userReports = reports.filter((r) => r.currentUserId === user.id).length;
-    const userReceived = received.filter((l) => l.currentUserId === user.id || userLetters.some((ul) => ul.recipientName === user.username)).length;
+    const userReports = reports.filter((r) => (user.id && r.currentUserId === user.id) || (!user.id && r.currentUsername === user.username)).length;
 
     return `<article class="ops-card user-card">
       <p class="eyebrow">利用者</p>
       <h3>${escapeHtml(user.username)}</h3>
       <p class="hint">${escapeHtml(user.id)}</p>
+      <p><strong>会員ランク：</strong>${rankBadgeHtml(user.rankKey, user.rankLabel)}</p>
+      <p><strong>書いた手紙：</strong>${user.letterCount || 0}枚</p>
       <div class="meta">
         <span class="pill">初回：${formatDate(user.createdAt)}</span>
         <span class="pill">最終：${formatDate(user.lastUsedAt)}</span>
       </div>
       <div class="user-stats">
-        <span>投稿した手紙：<strong>${normalLetters}</strong></span>
-        <span>送った本の手紙：<strong>${replyLetters}</strong></span>
+        <span>通常の手紙：<strong>${normalLetters}</strong></span>
+        <span>一冊の本の手紙：<strong>${replyLetters}</strong></span>
         <span>読後メモ：<strong>${userMemos}</strong></span>
         <span>相談／通報：<strong>${userReports}</strong></span>
       </div>
@@ -1371,6 +1608,7 @@ function handleAdminAction(action, letterId, reportId) {
   const commit = (updatedLetter, toastMessage, moveTab = true) => {
     letters[index] = updatedLetter;
     saveLetters(letters);
+    updateUserRanks();
     if (moveTab && Object.values(LETTER_STATUS).includes(updatedLetter.status)) {
       ADMIN_UI_STATE.tab = updatedLetter.status;
     }
@@ -1422,6 +1660,7 @@ function handleAdminAction(action, letterId, reportId) {
     if (!ok) return;
     const remained = letters.filter((l) => l.id !== letterId);
     saveLetters(remained);
+    updateUserRanks();
     setData(STORAGE_KEYS.received, getData(STORAGE_KEYS.received, []).filter((l) => l.id !== letterId));
     saveReports(loadReports().filter((r) => r.letterId !== letterId));
     closeAdminModal();
