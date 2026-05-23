@@ -428,3 +428,57 @@ button.ghost:hover { border-color: var(--ink); color: var(--ink); }
   h1 { font-size: 2.35rem; }
   .username-form-row { flex-direction: column; }
 }
+
+/* デモ注記 & 管理リンク（縮小版） */
+.footer-demo-note {
+  font-size: .8rem;
+  color: var(--muted);
+  margin: 0 0 .4rem;
+  opacity: .7;
+}
+.admin-link-small {
+  border: 0;
+  background: transparent;
+  color: rgba(47, 42, 36, .45);
+  font-size: .75rem;
+  cursor: pointer;
+  padding: 0;
+}
+.admin-link-small:hover { color: var(--muted); }
+
+/* 見本の手紙 */
+.sample-letter {
+  background: rgba(255, 250, 241, .6);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 1.2rem 1.6rem;
+  margin-top: 1rem;
+}
+.sample-book { font-weight: 600; margin-bottom: .5rem; }
+.sample-note {
+  font-size: .8rem;
+  color: var(--muted);
+  margin-top: 1rem;
+  font-style: italic;
+}
+
+/* 配達確認注記 */
+.delivery-notice {
+  background: rgba(255, 243, 200, .5);
+  border-left: 3px solid #d4a017;
+  padding: .8rem 1rem;
+  border-radius: 0 8px 8px 0;
+  font-size: .9rem;
+  color: var(--ink);
+  margin-bottom: .8rem;
+}
+
+/* 精神的健康注記など控えめなテキスト */
+.muted-note {
+  font-size: .85rem;
+  color: var(--muted);
+  opacity: .85;
+  border-top: 1px solid var(--line);
+  padding-top: .75rem;
+  margin-top: .75rem;
+}

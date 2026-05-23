@@ -19,24 +19,26 @@
       <button data-route="receive">受け取る</button>
       <button data-route="box">手紙箱</button>
       <button data-route="rules">ルール</button>
+      <button data-route="news">お知らせ</button>
     </nav>
   </header>
 
   <main id="app" class="app"></main>
   <footer class="site-footer">
-    <button class="admin-link" data-route="admin">運営室へ</button>
+    <p class="footer-demo-note">このサービスはデモ版です。入力した内容はこのブラウザ内にのみ保存されます。</p>
+    <button class="admin-link-small" data-route="admin">運営局</button>
   </footer>
 
   <template id="home-template">
     <section class="hero paper">
       <p class="eyebrow">これはOBI BOOKSのサービスです</p>
       <h1>知らない誰かと<br />本の感想を送り合う</h1>
-      <p class="lead">このサービスは、高知市にオープン予定の書店 OBI BOOKS 店主が作成しました。本の感想を誰かに伝えたくて読書会に参加してみたけど、うまく話せなかった…（すごく楽しかったけど！）という経験があり、その気持ちをどうにかできないか、という思いで作成してみました。実際の店舗では本当の手紙を使ってやりたいと考えているのですが、試してみようと思いweb上で出来るようにしています。使ってみての感想、要望があったらどんどん教えてください〜！</p>
+      <p class="lead">このサービスは、高知市にオープン予定の書店 OBI BOOKS 店主が作成しました。本の感想を誰かに伝えたくて読書会に参加してみたけど、うまく話せなかった…（すごく楽しかったけど！）という経験があり、その気持ちをどうにかできないか、という思いで作成してみました。実際の店舗では本当の手紙を使ってやりたいと考えているのですが、試してみようと思いweb上で出来るようにしています。使ってみて感じたことや、わかりにくかったところがあれば、ぜひ教えてください。この場所を、少しずつ整えていきます。</p>
 
       <!-- ユーザー名未入力時 -->
       <div id="username-input-area" class="username-area paper-inset">
         <h2>あなたの名前を決める</h2>
-        <p class="hint">本名である必要はありません。手紙の差出人として使う名前を入力してください。</p>
+        <p class="hint">ここで入力した名前は、このサービス内であなたを識別するために使われます。本名である必要はありません。</p>
         <p class="microcopy">入力例：夜の読書人 ／ 灯子 ／ OBIの誰か ／ 山のふもとの読者</p>
         <div class="username-form-row">
           <input id="username-input" type="text" placeholder="このサービス内で使う名前" maxlength="40" />
@@ -81,6 +83,16 @@
         <li>本の内容だけでなく、その本を読んだ日の生活や気持ちも書いていい。</li>
       </ul>
     </section>
+
+    <section class="paper narrow">
+      <h2>手紙の文体というのはこんな感じです</h2>
+      <p class="hint">上手な感想ではなく、その本を読んだあとの気持ちを書いてください。</p>
+      <article class="sample-letter">
+        <p class="eyebrow">見本の手紙</p>
+        <p>『旅をする木』を読み終えた日は、少し雨が降っていました。内容を全部理解できたわけではないけれど、著者がずっと北極圏の写真を撮り続けた話だけが、なぜか残っています。遠くへ行けない夜に、遠くの森を思いました。この本を読んで、昔の自分に少しだけ手紙を書きたくなりました。</p>
+        <p class="sample-note">― これは開発者が用意した見本です。実際のユーザーの手紙ではありません。</p>
+      </article>
+    </section>
   </template>
 
   <template id="write-template">
@@ -90,7 +102,7 @@
       <p class="hint">本の内容をきれいにまとめる必要はありません。その本を読んだ日のこと、思い出したこと、残った気持ちを書いてください。</p>
       <form id="letter-form" class="form">
         <label>差出人の名前<input name="senderName" required placeholder="例：夜の読書人" /></label>
-        <p class="microcopy">本名である必要はありません。手紙の中で使いたい名前を書いてください。</p>
+        <p class="microcopy">本名である必要はありません。この名前は手紙の差出人として相手に表示されます。メールアドレスや個人情報は表示されません。</p>
         <label>本のタイトル<input name="bookTitle" required placeholder="例：夜と霧" /></label>
         <label>著者名<input name="author" required placeholder="例：ヴィクトール・E・フランクル" /></label>
         <label>手紙のタイトル<input name="letterTitle" required placeholder="例：読み終えたあと、少しだけ黙っていた" /></label>
@@ -103,14 +115,19 @@
         </div>
         <label>手紙本文<textarea name="body" required rows="12" placeholder="拝啓、まだ名前を知らないあなたへ。\nこの本を読み終えたあと、私は……"></textarea></label>
         <div class="assist-box">
-          <strong>書くための小さな問い</strong>
+          <strong>送信前に確認してください</strong>
           <ul>
-            <li>この本を読んだとき、どこにいましたか？</li>
-            <li>読み終えたあと、最初に浮かんだ気持ちは？</li>
-            <li>誰かに一文だけ渡すなら、どんなことを書きますか？</li>
+            <li>本名、住所、電話番号、メールアドレス、SNSアカウントなどの個人情報を書いていない。</li>
+            <li>相手を攻撃したり、傷つけたりする表現を含んでいない。</li>
+            <li>出会いや連絡先交換を求める内容を書いていない。</li>
+            <li>本の本文を長く引用していない。</li>
+            <li>ネタバレがある場合は、「ネタバレあり」を選んでいる。</li>
           </ul>
         </div>
-        <label class="check"><input type="checkbox" name="safe" required /> 個人情報、連絡先、相手を傷つける表現、長すぎる引用が含まれていないことを確認しました。</label>
+        <label class="check"><input type="checkbox" name="safe" required /> 上記を確認し、この手紙を誰か一人へ届けます。</label>
+        <div class="delivery-notice">
+          <p>送られた手紙は、初期版では運営が確認してから配達します。相手を傷つける表現、個人情報、長すぎる引用などがある場合は、配達を止めることがあります。</p>
+        </div>
         <button class="primary" type="submit">手紙を預ける</button>
       </form>
     </section>
@@ -138,7 +155,7 @@
     <section class="paper">
       <p class="eyebrow">Envelope shelf</p>
       <h1>封筒棚</h1>
-      <p>見えるのは、手紙のタイトルと本の名前だけ。気になる一通を選んでください。</p>
+      <p>封筒棚に並ぶ手紙は、人気順ではありません。どの手紙も、いずれ誰か一人へ届きます。気になる一通を、静かに選んでください。</p>
       <div id="shelf-list" class="envelope-grid"></div>
     </section>
   </template>
@@ -161,11 +178,12 @@
         <li>相手を傷つける内容は送らない。</li>
         <li>個人情報や連絡先を書かない。</li>
         <li>返信を強要しない。</li>
-        <li>本の本文を長く引用しない。</li>
+        <li>本の本文を長く引用しない。短い一文程度にしてください。本文の長い転載やページの丸写しはしないでください。このサービスでは、本の内容を転載するのではなく、その本を読んだあなた自身の感想を書くことを大切にします。</li>
         <li>届いた手紙を無断で公開しない。</li>
         <li>困った手紙が届いた場合は、運営に相談できる。</li>
       </ul>
       <p class="hint">初期版では、運営が手紙を確認してから配達する想定です。</p>
+      <p class="hint muted-note">このサービスは、専門的な相談や緊急の支援を行う場所ではありません。深刻な悩みや危険がある場合は、身近な人や専門機関に相談してください。</p>
     </section>
   </template>
 

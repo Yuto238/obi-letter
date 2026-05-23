@@ -277,6 +277,7 @@ function render(route = location.hash.replace('#', '') || 'home') {
     receive: bindReceive,
     shelf: bindShelf,
     box: bindBox,
+    news: bindNews,
     admin: bindAdminRoute,
   };
 
@@ -486,7 +487,9 @@ function bindShelf() {
     return;
   }
 
-  list.innerHTML = letters.map((letter) => envelopeHtml(letter)).join('');
+  // 並び順は人気順ではなくランダム
+  const shuffled = [...letters].sort(() => Math.random() - 0.5);
+  list.innerHTML = shuffled.map((letter) => envelopeHtml(letter)).join('');
   list.querySelectorAll('[data-open-letter]').forEach((btn) => {
     btn.addEventListener('click', () => openLetter(btn.dataset.openLetter));
   });
@@ -577,7 +580,7 @@ function normalLetterHtml(letter, justOpened = false) {
   const alreadySent = hasReplyBeenSent(letter.id);
   const replyBlock = alreadySent
     ? '<p class="hint sent-note">この人へ一冊送りました</p>'
-    : `<button class="small-btn" data-open-reply="${letter.id}">この人へ本の手紙を送る</button>`;
+    : `<button class="small-btn" data-open-reply="${letter.id}">思い浮かんだ一冊を送る</button>`;
 
   return `<article class="letter" data-letter-id="${letter.id}">
     ${justOpened ? '<p class="eyebrow">あなた宛ての一通</p>' : ''}
@@ -615,7 +618,7 @@ function replyFormHtml(parentLetter) {
   return `<section class="assist-box">
     <p class="eyebrow">Book letter</p>
     <h3>一冊の本を、手紙として送る</h3>
-    <p class="hint">届いた手紙を読んで思い浮かんだ一冊を、感想と一緒に送ることができます。これは短い返信ではなく、あなたから相手へ贈る「一冊の本の手紙」です。</p>
+    <p class="hint">これは会話を続けるための機能ではありません。届いた手紙を読んで思い浮かんだ一冊があるときだけ、その本を一通の手紙として送ることができます。送らなくても大丈夫です。</p>
     <form class="form" data-reply-form="${parentLetter.id}">
       <label>差出人の名前<input name="senderName" required placeholder="例：灯子" value="${escapeHtml(currentUsername)}" /></label>
       <label>相手の名前<input name="recipientName" required value="${escapeHtml(parentLetter.senderName)}" /></label>
@@ -632,6 +635,10 @@ function replyFormHtml(parentLetter) {
       <button class="primary" type="submit">一冊の本を送る</button>
     </form>
   </section>`;
+}
+
+function bindNews() {
+  // news-templateはHTMLに静的コンテンツとして記述
 }
 
 function bindBox() {
@@ -707,6 +714,7 @@ function bindLetterActions() {
 
   document.querySelectorAll('[data-report]').forEach((btn) => {
     btn.onclick = () => {
+      alert('相談内容は運営だけが確認します。\n相手にあなたの名前や相談内容が伝わることはありません。\n内容を確認し、必要に応じて手紙を非公開にします。');
       const reason = prompt('相談理由を短く書いてください。');
       if (!reason) {
         return;
