@@ -5,6 +5,9 @@ const STORAGE_KEYS = {
   received: 'dokugo_received',
   reports: 'dokugo_reports',
   receiverName: 'dokugo_receiver_name',
+  users: 'dokugo_users',
+  currentUsername: 'dokugo_current_username',
+  currentUserId: 'dokugo_current_userId',
 };
 
 const SESSION_KEYS = {
@@ -92,6 +95,77 @@ function getReceiverName() {
 
 function setReceiverName(name) {
   localStorage.setItem(STORAGE_KEYS.receiverName, String(name || '').trim());
+}
+
+// ---- ユーザー名管理 ----
+
+function getCurrentUsername() {
+  return String(localStorage.getItem(STORAGE_KEYS.currentUsername) || '').trim();
+}
+
+function getCurrentUserId() {
+  return String(localStorage.getItem(STORAGE_KEYS.currentUserId) || '').trim();
+}
+
+function loadUsers() {
+  return getData(STORAGE_KEYS.users, []);
+}
+
+function saveUsers(users) {
+  setData(STORAGE_KEYS.users, users);
+}
+
+/**
+ * ユーザー名を設定する。同名が既存なら既存ユーザーを使い、なければ新規作成する。
+ * @param {string} username
+ * @returns {{ id: string, username: string, createdAt: string, lastUsedAt: string }}
+ */
+function setCurrentUser(username) {
+  const name = String(username || '').trim();
+  if (!name) {
+    return null;
+  }
+
+  const users = loadUsers();
+  let user = users.find((u) => u.username === name);
+
+  if (user) {
+    user.lastUsedAt = new Date().toISOString();
+  } else {
+    user = {
+      id: 'user_' + Date.now(),
+      username: name,
+      createdAt: new Date().toISOString(),
+      lastUsedAt: new Date().toISOString(),
+    };
+    users.unshift(user);
+  }
+
+  saveUsers(users);
+  localStorage.setItem(STORAGE_KEYS.currentUsername, name);
+  localStorage.setItem(STORAGE_KEYS.currentUserId, user.id);
+  return user;
+}
+
+function clearCurrentUser() {
+  localStorage.removeItem(STORAGE_KEYS.currentUsername);
+  localStorage.removeItem(STORAGE_KEYS.currentUserId);
+}
+
+/** ユーザー名が未設定の場合にガードメッセージを表示して true を返す */
+function guardUsername() {
+  if (getCurrentUsername()) {
+    return false;
+  }
+
+  app.innerHTML = `<section class="paper narrow center">
+    <p class="eyebrow">名前が必要です</p>
+    <h1>手紙を書くには、まずこのサービス内で使う名前を入力してください。</h1>
+    <p class="hint">メールアドレスやパスワードは不要です。サービス内で使うお好きな名前を決めてください。</p>
+    <button class="primary" data-route="home">名前を決める画面へ</button>
+  </section>`;
+  bindCommonRoutes();
+  return true;
 }
 
 function parseMoodTags(raw = '') {
@@ -198,6 +272,7 @@ function render(route = location.hash.replace('#', '') || 'home') {
   bindCommonRoutes();
 
   const binders = {
+    home: bindHome,
     write: bindWrite,
     receive: bindReceive,
     shelf: bindShelf,
@@ -226,7 +301,66 @@ document.querySelectorAll('[data-route]').forEach((el) => {
 
 window.addEventListener('hashchange', () => render());
 
+function bindHome() {
+  const inputArea = document.querySelector('#username-input-area');
+  const activeArea = document.querySelector('#username-active-area');
+  const input = document.querySelector('#username-input');
+  const saveBtn = document.querySelector('#username-save-btn');
+  const errorEl = document.querySelector('#username-error');
+  const greeting = document.querySelector('#username-greeting');
+  const changeBtn = document.querySelector('#username-change-btn');
+
+  function showActiveState(username) {
+    inputArea.hidden = true;
+    activeArea.hidden = false;
+    greeting.textContent = `${username}さんとして利用中`;
+    bindCommonRoutes();
+  }
+
+  function showInputState() {
+    inputArea.hidden = false;
+    activeArea.hidden = true;
+  }
+
+  const currentUsername = getCurrentUsername();
+  if (currentUsername) {
+    showActiveState(currentUsername);
+  } else {
+    showInputState();
+  }
+
+  saveBtn.addEventListener('click', () => {
+    const val = String(input.value || '').trim();
+    if (!val) {
+      errorEl.textContent = '名前を入力してください。';
+      return;
+    }
+    errorEl.textContent = '';
+    setCurrentUser(val);
+    showActiveState(val);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      saveBtn.click();
+    }
+  });
+
+  changeBtn.addEventListener('click', () => {
+    input.value = getCurrentUsername();
+    showInputState();
+  });
+}
+
 function bindWrite() {
+  if (guardUsername()) return;
+
+  // 差出人名に現在のユーザー名を自動入力
+  const senderInput = document.querySelector('[name="senderName"]');
+  if (senderInput && !senderInput.value) {
+    senderInput.value = getCurrentUsername();
+  }
+
   document.querySelector('#letter-form').addEventListener('submit', (e) => {
     e.preventDefault();
 
@@ -234,7 +368,9 @@ function bindWrite() {
     const letter = {
       id: crypto.randomUUID(),
       type: 'normalLetter',
-      senderName: String(form.get('senderName') || '').trim(),
+      currentUserId: getCurrentUserId(),
+      currentUsername: getCurrentUsername(),
+      senderName: String(form.get('senderName') || '').trim() || getCurrentUsername(),
       bookTitle: String(form.get('bookTitle') || '').trim(),
       author: String(form.get('author') || '').trim(),
       letterTitle: String(form.get('letterTitle') || '').trim(),
@@ -277,6 +413,8 @@ function canReceiveDirect(letter, receiverName) {
 }
 
 function bindReceive() {
+  if (guardUsername()) return;
+
   const receiverInput = document.querySelector('#receiver-name');
   const saveButton = document.querySelector('#save-receiver-name');
   const savedName = getReceiverName();
@@ -338,6 +476,8 @@ function bindReceive() {
 }
 
 function bindShelf() {
+  if (guardUsername()) return;
+
   const list = document.querySelector('#shelf-list');
   const letters = loadLetters().filter(canShowOnShelf);
 
@@ -471,12 +611,13 @@ function letterHtml(letter, justOpened = false) {
 }
 
 function replyFormHtml(parentLetter) {
+  const currentUsername = getCurrentUsername();
   return `<section class="assist-box">
     <p class="eyebrow">Book letter</p>
     <h3>一冊の本を、手紙として送る</h3>
     <p class="hint">届いた手紙を読んで思い浮かんだ一冊を、感想と一緒に送ることができます。これは短い返信ではなく、あなたから相手へ贈る「一冊の本の手紙」です。</p>
     <form class="form" data-reply-form="${parentLetter.id}">
-      <label>差出人の名前<input name="senderName" required placeholder="例：灯子" /></label>
+      <label>差出人の名前<input name="senderName" required placeholder="例：灯子" value="${escapeHtml(currentUsername)}" /></label>
       <label>相手の名前<input name="recipientName" required value="${escapeHtml(parentLetter.senderName)}" /></label>
       <label>おすすめしたい本のタイトル<input name="bookTitle" required placeholder="例：夜と霧" /></label>
       <label>著者名<input name="author" required placeholder="例：ヴィクトール・E・フランクル" /></label>
@@ -494,6 +635,8 @@ function replyFormHtml(parentLetter) {
 }
 
 function bindBox() {
+  if (guardUsername()) return;
+
   const list = document.querySelector('#box-list');
   const received = getData(STORAGE_KEYS.received);
   const receiverHint = document.querySelector('#box-receiver-name');
@@ -534,6 +677,8 @@ function bindLetterActions() {
         id: crypto.randomUUID(),
         type: 'replyBookLetter',
         parentLetterId,
+        currentUserId: getCurrentUserId(),
+        currentUsername: getCurrentUsername(),
         senderName: String(form.get('senderName') || '').trim(),
         recipientName: String(form.get('recipientName') || '').trim(),
         bookTitle: String(form.get('bookTitle') || '').trim(),
@@ -576,6 +721,8 @@ function bindLetterActions() {
       reports.unshift({
         id: crypto.randomUUID(),
         letterId: btn.dataset.report,
+        currentUserId: getCurrentUserId(),
+        currentUsername: getCurrentUsername(),
         reason,
         content,
         status: 'open',
@@ -591,7 +738,9 @@ function bindLetterActions() {
       const article = btn.closest('.letter');
       const memo = article.querySelector('.memo-input').value;
       const received = getData(STORAGE_KEYS.received).map((l) => (
-        l.id === btn.dataset.saveMemo ? { ...l, memo } : l
+        l.id === btn.dataset.saveMemo
+          ? { ...l, memo, memoUserId: getCurrentUserId(), memoUsername: getCurrentUsername() }
+          : l
       ));
       setData(STORAGE_KEYS.received, received);
       alert('読後メモを保存しました。');
@@ -631,6 +780,7 @@ function bindAdmin() {
   renderAdminStats();
   renderAdminLetters();
   renderAdminReports();
+  renderAdminUsers();
 
   document.querySelector('#admin-logout').addEventListener('click', () => {
     setAdminLoginState(false);
@@ -652,15 +802,25 @@ function renderAdminStats() {
   const stats = document.querySelector('#admin-stats');
   const letters = loadLetters();
   const reports = loadReports();
+  const users = loadUsers();
 
   const pendingCount = letters.filter((letter) => letter.moderationStatus === 'pending').length;
   const replyCount = letters.filter((letter) => letter.type === 'replyBookLetter').length;
+
+  // ユーザー関連統計
+  const usersWhoWrote = new Set(letters.filter((l) => l.currentUserId).map((l) => l.currentUserId));
+  const usersWhoReplied = new Set(letters.filter((l) => l.type === 'replyBookLetter' && l.currentUserId).map((l) => l.currentUserId));
+  const usersWhoReported = new Set(reports.filter((r) => r.currentUserId).map((r) => r.currentUserId));
 
   stats.innerHTML = `
     <article class="stat-card"><h2>${letters.length}</h2><p>投稿された手紙</p></article>
     <article class="stat-card"><h2>${pendingCount}</h2><p>未確認の手紙</p></article>
     <article class="stat-card"><h2>${reports.length}</h2><p>相談の件数</p></article>
     <article class="stat-card"><h2>${replyCount}</h2><p>一冊の本の手紙</p></article>
+    <article class="stat-card"><h2>${users.length}</h2><p>利用者数</p></article>
+    <article class="stat-card"><h2>${usersWhoWrote.size}</h2><p>手紙を書いた利用者</p></article>
+    <article class="stat-card"><h2>${usersWhoReplied.size}</h2><p>一冊の本を送った利用者</p></article>
+    <article class="stat-card"><h2>${usersWhoReported.size}</h2><p>相談した利用者</p></article>
   `;
 }
 
@@ -721,6 +881,7 @@ function adminLetterCard(letter) {
     <p class="eyebrow">${typeLabel} / ${deliveryStatusLabel(letter)}</p>
     <h3>${escapeHtml(letter.letterTitle)}</h3>
     <p><strong>差出人名：</strong>${escapeHtml(letter.senderName)}</p>
+    <p><strong>利用者：</strong>${letter.currentUsername ? `${escapeHtml(letter.currentUsername)} / ${escapeHtml(letter.currentUserId)}` : '（記録なし）'}</p>
     <p><strong>宛先名：</strong>${escapeHtml(letter.recipientName || '指定なし')}</p>
     <p><strong>元になった手紙ID：</strong>${escapeHtml(letter.parentLetterId || 'なし')}</p>
     <p><strong>本のタイトル：</strong>${escapeHtml(letter.bookTitle)} ／ <strong>著者名：</strong>${escapeHtml(letter.author)}</p>
@@ -785,6 +946,7 @@ function renderAdminReports() {
     return `<article class="ops-card">
       <p class="eyebrow">${report.status === 'resolved' ? '対応済み' : '未対応'}</p>
       <h3>相談された手紙：${escapeHtml(linkedLetter?.letterTitle || '手紙情報なし')}</h3>
+      <p><strong>相談した利用者：</strong>${report.currentUsername ? `${escapeHtml(report.currentUsername)} / ${escapeHtml(report.currentUserId)}` : '（記録なし）'}</p>
       <p><strong>種別：</strong>${escapeHtml(linkedLetter?.type === 'replyBookLetter' ? '一冊の本の手紙' : '通常の手紙')}</p>
       <p><strong>差出人名：</strong>${escapeHtml(linkedLetter?.senderName || '不明')}</p>
       <p><strong>宛先名：</strong>${escapeHtml(linkedLetter?.recipientName || '指定なし')}</p>
@@ -808,6 +970,58 @@ function renderAdminReports() {
       render('admin');
     });
   });
+}
+
+function renderAdminUsers(filterQuery = '') {
+  const el = document.querySelector('#admin-users');
+  if (!el) return;
+
+  const users = loadUsers();
+  const letters = loadLetters();
+  const reports = loadReports();
+  const received = getData(STORAGE_KEYS.received, []);
+
+  const query = filterQuery.trim().toLowerCase();
+  const filtered = query
+    ? users.filter((u) => u.username.toLowerCase().includes(query))
+    : users;
+
+  // 検索フィールドのバインド（初回のみ）
+  const searchInput = document.querySelector('#admin-user-search');
+  if (searchInput && !searchInput.dataset.bound) {
+    searchInput.dataset.bound = '1';
+    searchInput.addEventListener('input', () => renderAdminUsers(searchInput.value));
+  }
+
+  if (!filtered.length) {
+    el.innerHTML = '<div class="empty">利用者はまだいません。</div>';
+    return;
+  }
+
+  el.innerHTML = filtered.map((user) => {
+    const userLetters = letters.filter((l) => l.currentUserId === user.id);
+    const normalLetters = userLetters.filter((l) => l.type === 'normalLetter').length;
+    const replyLetters = userLetters.filter((l) => l.type === 'replyBookLetter').length;
+    const userMemos = received.filter((l) => l.memoUserId === user.id && l.memo).length;
+    const userReports = reports.filter((r) => r.currentUserId === user.id).length;
+    const userReceived = received.filter((l) => l.currentUserId === user.id || userLetters.some((ul) => ul.recipientName === user.username)).length;
+
+    return `<article class="ops-card user-card">
+      <p class="eyebrow">利用者</p>
+      <h3>${escapeHtml(user.username)}</h3>
+      <p class="hint">${escapeHtml(user.id)}</p>
+      <div class="meta">
+        <span class="pill">初回：${formatDate(user.createdAt)}</span>
+        <span class="pill">最終：${formatDate(user.lastUsedAt)}</span>
+      </div>
+      <div class="user-stats">
+        <span>投稿した手紙：<strong>${normalLetters}</strong></span>
+        <span>送った本の手紙：<strong>${replyLetters}</strong></span>
+        <span>読後メモ：<strong>${userMemos}</strong></span>
+        <span>相談／通報：<strong>${userReports}</strong></span>
+      </div>
+    </article>`;
+  }).join('');
 }
 
 function trimText(text, maxLength) {

@@ -347,10 +347,84 @@ h2 { margin-top: 0; line-height: 1.35; }
 }
 .reply-compose { margin-top: .8rem; }
 .reply-compose h3 { margin: 0 0 .4rem; }
+
+/* ユーザー名エリア */
+.username-area {
+  margin: 2rem auto 0;
+  max-width: 520px;
+  text-align: left;
+}
+.username-area h2 {
+  font-size: 1.3rem;
+  margin: 0 0 .4rem;
+}
+.username-form-row {
+  display: flex;
+  gap: .6rem;
+  margin-top: .8rem;
+}
+.username-form-row input {
+  flex: 1;
+  padding: .6rem .9rem;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: #fffaf1;
+}
+.username-active {
+  text-align: center;
+}
+.username-greeting {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 0 0 1rem;
+}
+.error-message {
+  color: var(--danger);
+  font-size: .9rem;
+  margin-top: .4rem;
+  min-height: 1.2em;
+}
+
+/* ゴーストボタン */
+button.ghost {
+  background: transparent;
+  border: 1.5px solid var(--muted);
+  color: var(--muted);
+  border-radius: 10px;
+  padding: .5rem 1.2rem;
+  font-size: .95rem;
+}
+button.ghost:hover { border-color: var(--ink); color: var(--ink); }
+
+/* 運営室ユーザー検索 */
+.admin-user-search {
+  margin-bottom: 1rem;
+}
+.admin-user-search input {
+  width: 100%;
+  padding: .6rem .9rem;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: #fffaf1;
+}
+
+/* ユーザーカード統計 */
+.user-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem .8rem;
+  font-size: .9rem;
+  color: var(--muted);
+  margin-top: .6rem;
+}
+.user-stats strong { color: var(--ink); }
+
 @media (max-width: 840px) {
   .site-header { align-items: flex-start; flex-direction: column; }
   .nav { justify-content: flex-start; }
   .grid-3, .envelope-grid, .admin-grid, .admin-stats, .split { grid-template-columns: 1fr; }
   .admin-head { flex-direction: column; }
   h1 { font-size: 2.35rem; }
+  .username-form-row { flex-direction: column; }
 }

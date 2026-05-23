@@ -32,9 +32,28 @@
       <p class="eyebrow">これはOBI BOOKSのサービスです</p>
       <h1>知らない誰かと<br />本の感想を送り合う</h1>
       <p class="lead">このサービスは、高知市にオープン予定の書店 OBI BOOKS 店主が作成しました。本の感想を誰かに伝えたくて読書会に参加してみたけど、うまく話せなかった…（すごく楽しかったけど！）という経験があり、その気持ちをどうにかできないか、という思いで作成してみました。実際の店舗では本当の手紙を使ってやりたいと考えているのですが、試してみようと思いweb上で出来るようにしています。使ってみての感想、要望があったらどんどん教えてください〜！</p>
-      <div class="hero-actions">
-        <button class="primary" data-route="write">手紙を書く</button>
-        <button class="secondary" data-route="receive">手紙を受け取る</button>
+
+      <!-- ユーザー名未入力時 -->
+      <div id="username-input-area" class="username-area paper-inset">
+        <h2>あなたの名前を決める</h2>
+        <p class="hint">本名である必要はありません。手紙の差出人として使う名前を入力してください。</p>
+        <p class="microcopy">入力例：夜の読書人 ／ 灯子 ／ OBIの誰か ／ 山のふもとの読者</p>
+        <div class="username-form-row">
+          <input id="username-input" type="text" placeholder="このサービス内で使う名前" maxlength="40" />
+          <button class="primary" id="username-save-btn">この名前で使う</button>
+        </div>
+        <p id="username-error" class="error-message" aria-live="polite"></p>
+      </div>
+
+      <!-- ユーザー名入力済み時 -->
+      <div id="username-active-area" class="username-area username-active" hidden>
+        <p class="username-greeting" id="username-greeting"></p>
+        <div class="hero-actions">
+          <button class="primary" data-route="write">手紙を書く</button>
+          <button class="secondary" data-route="shelf">封筒棚を見る</button>
+          <button class="secondary" data-route="box">手紙箱を見る</button>
+          <button class="ghost" id="username-change-btn">名前を変える</button>
+        </div>
       </div>
     </section>
 
@@ -193,6 +212,14 @@
         <section class="admin-panel">
           <h2>相談一覧</h2>
           <div id="admin-reports"></div>
+        </section>
+
+        <section class="admin-panel">
+          <h2>読み手たち</h2>
+          <div class="admin-user-search">
+            <input id="admin-user-search" type="text" placeholder="ユーザー名で検索" />
+          </div>
+          <div id="admin-users"></div>
         </section>
       </div>
       <button class="danger" id="reset-demo">デモデータを初期化</button>
