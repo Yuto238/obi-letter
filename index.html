@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OBI LETTERS｜読後の手紙を、誰か一人へ</title>
+  <meta name="description" content="読んだ本の感想を、匿名の誰か一人と手紙形式で交換するWebサービスのMVPプロトタイプです。" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand" data-route="home" role="button" tabindex="0">
+      <span class="brand-mark">✉</span>
+      <span>OBI LETTERS</span>
+    </div>
+    <nav class="nav">
+      <button data-route="home">ホーム</button>
+      <button data-route="write">手紙を書く</button>
+      <button data-route="receive">受け取る</button>
+      <button data-route="box">手紙箱</button>
+      <button data-route="rules">ルール</button>
+    </nav>
+  </header>
+
+  <main id="app" class="app"></main>
+  <footer class="site-footer">
+    <button class="admin-link" data-route="admin">運営室へ</button>
+  </footer>
+
+  <template id="home-template">
+    <section class="hero paper">
+      <p class="eyebrow">これはOBI BOOKSのサービスです</p>
+      <h1>知らない誰かと<br />本の感想を送り合う</h1>
+      <p class="lead">このサービスは、高知市にオープン予定の書店 OBI BOOKS 店主が作成しました。本の感想を誰かに伝えたくて読書会に参加してみたけど、うまく話せなかった…（すごく楽しかったけど！）という経験があり、その気持ちをどうにかできないか、という思いで作成してみました。実際の店舗では本当の手紙を使ってやりたいと考えているのですが、試してみようと思いweb上で出来るようにしています。使ってみての感想、要望があったらどんどん教えてください〜！</p>
+      <div class="hero-actions">
+        <button class="primary" data-route="write">手紙を書く</button>
+        <button class="secondary" data-route="receive">手紙を受け取る</button>
+      </div>
+    </section>
+
+    <section class="grid-3">
+      <article class="card">
+        <h2>1. 手紙を書く</h2>
+        <p>読んだ本のタイトル、著者名、読後に残った気持ちを書きます。上手な感想である必要はありません。</p>
+      </article>
+      <article class="card">
+        <h2>2. 一通だけ届く</h2>
+        <p>おまかせ便なら匿名の誰かから偶然に。封筒棚ならタイトルを見て自分で一通選べます。</p>
+      </article>
+      <article class="card">
+        <h2>3. 余韻を残す</h2>
+        <p>届いた手紙は手紙箱へ。返信ではなく、自分だけの読後メモを残せます。</p>
+      </article>
+    </section>
+
+    <section class="paper narrow">
+      <h2>この場所で大切にしたいこと</h2>
+      <ul class="soft-list">
+        <li>たくさんの人に見せるより、たった一人へ届ける。</li>
+        <li>評価される文章ではなく、誰かにそっと届く文章を書く。</li>
+        <li>匿名だけど、雑にしない。知らない人だからこそ丁寧にする。</li>
+        <li>本の内容だけでなく、その本を読んだ日の生活や気持ちも書いていい。</li>
+      </ul>
+    </section>
+  </template>
+
+  <template id="write-template">
+    <section class="paper narrow">
+      <p class="eyebrow">Letter after reading</p>
+      <h1>読後の手紙を書く</h1>
+      <p class="hint">本の内容をきれいにまとめる必要はありません。その本を読んだ日のこと、思い出したこと、残った気持ちを書いてください。</p>
+      <form id="letter-form" class="form">
+        <label>差出人の名前<input name="senderName" required placeholder="例：夜の読書人" /></label>
+        <p class="microcopy">本名である必要はありません。手紙の中で使いたい名前を書いてください。</p>
+        <label>本のタイトル<input name="bookTitle" required placeholder="例：夜と霧" /></label>
+        <label>著者名<input name="author" required placeholder="例：ヴィクトール・E・フランクル" /></label>
+        <label>手紙のタイトル<input name="letterTitle" required placeholder="例：読み終えたあと、少しだけ黙っていた" /></label>
+        <p class="microcopy">目立たせるためではなく、この手紙の気配をそっと表す言葉がおすすめです。</p>
+        <div class="split">
+          <label>ジャンル<select name="genre" required>
+            <option>小説</option><option>エッセイ</option><option>詩歌</option><option>人文</option><option>ノンフィクション</option><option>漫画</option><option>その他</option>
+          </select></label>
+          <label>届け方<select name="delivery"><option>封筒棚にも並べる</option><option>おまかせ便のみ</option></select></label>
+        </div>
+        <label>手紙本文<textarea name="body" required rows="12" placeholder="拝啓、まだ名前を知らないあなたへ。\nこの本を読み終えたあと、私は……"></textarea></label>
+        <div class="assist-box">
+          <strong>書くための小さな問い</strong>
+          <ul>
+            <li>この本を読んだとき、どこにいましたか？</li>
+            <li>読み終えたあと、最初に浮かんだ気持ちは？</li>
+            <li>誰かに一文だけ渡すなら、どんなことを書きますか？</li>
+          </ul>
+        </div>
+        <label class="check"><input type="checkbox" name="safe" required /> 個人情報、連絡先、相手を傷つける表現、長すぎる引用が含まれていないことを確認しました。</label>
+        <button class="primary" type="submit">手紙を預ける</button>
+      </form>
+    </section>
+  </template>
+
+  <template id="receive-template">
+    <section class="paper narrow center">
+      <p class="eyebrow">Receive a letter</p>
+      <h1>今日はどうやって手紙を受け取りますか？</h1>
+      <div class="receiver-box">
+        <label>受け取り名<input id="receiver-name" placeholder="例：夜の読書人" /></label>
+        <p class="microcopy">「一冊の本を送る」で届く手紙は、この名前あてに届きます。</p>
+        <button class="secondary" id="save-receiver-name">この名前で受け取る</button>
+      </div>
+      <div class="choice-row">
+        <button class="primary" id="random-receive">おまかせで一通受け取る</button>
+        <button class="secondary" data-route="shelf">封筒棚から一通選ぶ</button>
+      </div>
+      <div id="direct-result" class="result"></div>
+      <div id="receive-result" class="result"></div>
+    </section>
+  </template>
+
+  <template id="shelf-template">
+    <section class="paper">
+      <p class="eyebrow">Envelope shelf</p>
+      <h1>封筒棚</h1>
+      <p>見えるのは、手紙のタイトルと本の名前だけ。気になる一通を選んでください。</p>
+      <div id="shelf-list" class="envelope-grid"></div>
+    </section>
+  </template>
+
+  <template id="box-template">
+    <section class="paper">
+      <p class="eyebrow">Your letter box</p>
+      <h1>手紙箱</h1>
+      <p>あなたが受け取った手紙を保存しています。返信ではなく、自分だけの読後メモを残せます。</p>
+      <p class="hint" id="box-receiver-name"></p>
+      <div id="box-list" class="letter-list"></div>
+    </section>
+  </template>
+
+  <template id="rules-template">
+    <section class="paper narrow">
+      <p class="eyebrow">Rules</p>
+      <h1>利用ルール</h1>
+      <ul class="rule-list">
+        <li>相手を傷つける内容は送らない。</li>
+        <li>個人情報や連絡先を書かない。</li>
+        <li>返信を強要しない。</li>
+        <li>本の本文を長く引用しない。</li>
+        <li>届いた手紙を無断で公開しない。</li>
+        <li>困った手紙が届いた場合は、運営に相談できる。</li>
+      </ul>
+      <p class="hint">初期版では、運営が手紙を確認してから配達する想定です。</p>
+    </section>
+  </template>
+
+  <template id="news-template">
+    <section class="paper narrow">
+      <p class="eyebrow">News</p>
+      <h1>運営からのお知らせ</h1>
+      <article class="notice"><time>2026.05.23</time><h2>静かな読後便を整えています</h2><p>手紙を書く体験と受け取る体験を、少しずつ丁寧に育てています。</p></article>
+    </section>
+  </template>
+
+  <template id="admin-login-template">
+    <section class="paper narrow">
+      <p class="eyebrow">Operation room</p>
+      <h1>運営室へ入る</h1>
+      <p>ここから先は、手紙の配達を見守るための運営用ページです。</p>
+      <form id="admin-login-form" class="form">
+        <label>運営パスワード<input type="password" name="password" required placeholder="パスワードを入力" /></label>
+        <button class="primary" type="submit">運営室へ入る</button>
+      </form>
+      <p id="admin-login-error" class="error-message" aria-live="polite"></p>
+    </section>
+  </template>
+
+  <template id="admin-template">
+    <section class="paper">
+      <div class="admin-head">
+        <div>
+          <p class="eyebrow">Operation room</p>
+          <h1>運営室</h1>
+          <p class="hint">投稿された手紙と相談を確認し、配達状態を整えます。</p>
+        </div>
+        <button class="secondary" id="admin-logout">運営室を出る</button>
+      </div>
+
+      <section class="admin-stats" id="admin-stats"></section>
+
+      <div class="admin-stack">
+        <section class="admin-panel">
+          <h2>手紙一覧</h2>
+          <div id="admin-letters"></div>
+        </section>
+
+        <section class="admin-panel">
+          <h2>相談一覧</h2>
+          <div id="admin-reports"></div>
+        </section>
+      </div>
+      <button class="danger" id="reset-demo">デモデータを初期化</button>
+    </section>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
