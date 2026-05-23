@@ -42,6 +42,28 @@ const ADMIN_UI_STATE = {
   date: 'all',
 };
 
+function normalizeLetterStatus(rawStatus, rawModerationStatus) {
+  const status = String(rawStatus || '').trim();
+  const moderationStatus = String(rawModerationStatus || '').trim();
+
+  // 新仕様の status はそのまま採用
+  if (Object.values(LETTER_STATUS).includes(status)) {
+    return status;
+  }
+
+  // 旧仕様の status 互換
+  if (status === 'deliverable') return LETTER_STATUS.published;
+  if (status === 'sealed') return LETTER_STATUS.private;
+  if (status === 'reviewed' || status === 'open') return LETTER_STATUS.pending;
+
+  // moderationStatus から移行
+  if (moderationStatus === 'deliverable') return LETTER_STATUS.published;
+  if (moderationStatus === 'sealed') return LETTER_STATUS.private;
+  if (moderationStatus === 'reviewed' || moderationStatus === 'pending') return LETTER_STATUS.pending;
+
+  return LETTER_STATUS.pending;
+}
+
 const sampleLetters = [
   {
     id: crypto.randomUUID(),
@@ -58,6 +80,7 @@ const sampleLetters = [
     moodTags: ['旅', '静かな夜', '遠くへ行きたい'],
     body: '拝啓、まだ名前を知らないあなたへ。\n\nこの本を読んでいるあいだ、私はずっと遠くに行きたいと思っていました。でも読み終えたあとに残ったのは、どこかへ行くことより、今いる場所の空気をもう少し深く吸ってみたいという気持ちでした。\n\nページの向こうにある森や川は、たぶん私の生活とは遠いです。それでも、朝に窓を開けることや、いつもより少しゆっくり歩くことならできる。そんな小さな自由を思い出しました。\n\nあなたがこの手紙を読む夜にも、どこか遠くの風が少しだけ届きますように。',
     createdAt: new Date().toISOString(),
+    status: LETTER_STATUS.published,
     moderationStatus: 'deliverable',
     consultationStatus: 'open',
     opened: false,
@@ -77,6 +100,7 @@ const sampleLetters = [
     moodTags: ['生活', '違和感', 'ひとり'],
     body: '拝啓。\n\nこの本を読み終えたあと、私はしばらく台所に立っていました。冷蔵庫の音だけがしていて、急に自分の生活の形がよくわからなくなりました。\n\n普通に働くこと。普通に話すこと。普通に生きること。普段は便利に使っている言葉なのに、こんなに誰かを追い詰める言葉でもあるのだと思いました。\n\nでも同時に、自分の違和感を完全に消さなくても生きていていいのかもしれない、とも思いました。',
     createdAt: new Date().toISOString(),
+    status: LETTER_STATUS.published,
     moderationStatus: 'deliverable',
     consultationStatus: 'open',
     opened: false,
@@ -96,6 +120,7 @@ const sampleLetters = [
     moodTags: ['余韻', '喪失', '曇りの日'],
     body: '名前のない誰かへ。\n\nこの本を読み終えたあと、私は何かを失くしたような気がしました。でも、その何かの名前が最後までわかりませんでした。\n\n物語の筋を説明するより、読み終えたあとの空気のほうが強く残っています。少し乾いていて、少し遠くて、でも完全には冷たくない空気です。\n\n本には、忘れていた感情を取り出す力があるのかもしれません。あるいは、忘れていたことすら忘れていた感情を。',
     createdAt: new Date().toISOString(),
+    status: LETTER_STATUS.published,
     moderationStatus: 'deliverable',
     consultationStatus: 'open',
     opened: false,
@@ -204,11 +229,7 @@ function normalizeLetter(letter) {
   const type = letter.type || 'normalLetter';
   const deliveryMode = letter.deliveryMode || (type === 'replyBookLetter' ? 'direct' : (letter.delivery === 'おまかせ便のみ' ? 'randomOnly' : 'shelfAndRandom'));
   const mood = letter.mood || '';
-  const oldModeration = letter.moderationStatus || '';
-  const migratedStatus = letter.status
-    || (oldModeration === 'deliverable' ? LETTER_STATUS.published
-      : oldModeration === 'sealed' ? LETTER_STATUS.private
-        : LETTER_STATUS.pending);
+  const migratedStatus = normalizeLetterStatus(letter.status, letter.moderationStatus);
 
   return {
     ...letter,
