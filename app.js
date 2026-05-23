@@ -17,6 +17,31 @@ const SESSION_KEYS = {
 // この管理者パスワード機能はプロトタイプ用です。本番環境では、Firebase Authentication、Supabase Auth、Next.js API Routesなどを使い、サーバー側で認証・権限管理を行う必要があります。
 const ADMIN_PASSWORD = 'obi-admin';
 
+const LETTER_STATUS = {
+  pending: 'pending',
+  published: 'published',
+  onHold: 'onHold',
+  private: 'private',
+  deleted: 'deleted',
+};
+
+const STATUS_LABEL = {
+  [LETTER_STATUS.pending]: '未確認',
+  [LETTER_STATUS.published]: '公開中',
+  [LETTER_STATUS.onHold]: '保留中',
+  [LETTER_STATUS.private]: '非公開',
+  [LETTER_STATUS.deleted]: '削除済み',
+};
+
+const ADMIN_UI_STATE = {
+  tab: LETTER_STATUS.pending,
+  query: '',
+  spoiler: 'all',
+  genre: 'all',
+  report: 'all',
+  date: 'all',
+};
+
 const sampleLetters = [
   {
     id: crypto.randomUUID(),
@@ -179,6 +204,11 @@ function normalizeLetter(letter) {
   const type = letter.type || 'normalLetter';
   const deliveryMode = letter.deliveryMode || (type === 'replyBookLetter' ? 'direct' : (letter.delivery === 'おまかせ便のみ' ? 'randomOnly' : 'shelfAndRandom'));
   const mood = letter.mood || '';
+  const oldModeration = letter.moderationStatus || '';
+  const migratedStatus = letter.status
+    || (oldModeration === 'deliverable' ? LETTER_STATUS.published
+      : oldModeration === 'sealed' ? LETTER_STATUS.private
+        : LETTER_STATUS.pending);
 
   return {
     ...letter,
@@ -191,7 +221,15 @@ function normalizeLetter(letter) {
     mood,
     moodTags: Array.isArray(letter.moodTags) ? letter.moodTags : parseMoodTags(mood),
     deliveryMode,
-    moderationStatus: letter.moderationStatus || (letter.status === 'sealed' ? 'sealed' : 'deliverable'),
+    status: migratedStatus,
+    publishedAt: letter.publishedAt || null,
+    heldAt: letter.heldAt || null,
+    holdReason: String(letter.holdReason || ''),
+    privateAt: letter.privateAt || null,
+    deletedAt: letter.deletedAt || null,
+    deleteReason: String(letter.deleteReason || ''),
+    operationHistory: Array.isArray(letter.operationHistory) ? letter.operationHistory : [],
+    moderationStatus: letter.moderationStatus || moderationStatusFromStatus(migratedStatus),
     consultationStatus: letter.consultationStatus || 'open',
     opened: Boolean(letter.opened),
     createdAt: letter.createdAt || new Date().toISOString(),
@@ -419,6 +457,7 @@ function bindWrite() {
       moodTags: parseMoodTags(String(form.get('mood') || '').trim()),
       body: String(form.get('body') || '').trim(),
       createdAt: new Date().toISOString(),
+      status: LETTER_STATUS.pending,
       moderationStatus: 'pending',
       consultationStatus: 'open',
       opened: false,
@@ -434,7 +473,7 @@ function bindWrite() {
 }
 
 function canReceiveRandom(letter) {
-  return letter.type === 'normalLetter' && !letter.opened && letter.moderationStatus === 'deliverable';
+  return letter.type === 'normalLetter' && !letter.opened && letter.status === LETTER_STATUS.published;
 }
 
 function canShowOnShelf(letter) {
@@ -444,7 +483,7 @@ function canShowOnShelf(letter) {
 function canReceiveDirect(letter, receiverName) {
   return letter.type === 'replyBookLetter'
     && !letter.opened
-    && letter.moderationStatus === 'deliverable'
+    && letter.status === LETTER_STATUS.published
     && Boolean(receiverName)
     && letter.recipientName === receiverName;
 }
@@ -733,6 +772,7 @@ function bindLetterActions() {
         spoiler: String(form.get('spoiler') || 'false') === 'true',
         moodTags,
         createdAt: new Date().toISOString(),
+        status: LETTER_STATUS.pending,
         moderationStatus: 'pending',
         consultationStatus: 'open',
         deliveryMode: 'direct',
@@ -821,10 +861,8 @@ function bindAdminLogin() {
 }
 
 function bindAdmin() {
-  renderAdminStats();
-  renderAdminLetters();
-  renderAdminReports();
-  renderAdminUsers();
+  bindAdminTabsAndFilters();
+  renderAdminView();
 
   document.querySelector('#admin-logout').addEventListener('click', () => {
     setAdminLoginState(false);
@@ -840,143 +878,212 @@ function bindAdmin() {
     ensureSeedData();
     render('admin');
   });
+
+  const adminRoot = document.querySelector('.admin-page');
+  adminRoot?.addEventListener('click', (e) => {
+    const target = e.target.closest('[data-admin-action], [data-admin-tab], [data-close-admin-modal], [data-open-letter-from-report], [data-admin-summary-tab]');
+    if (!target) {
+      return;
+    }
+
+    if (target.dataset.adminTab) {
+      ADMIN_UI_STATE.tab = target.dataset.adminTab;
+      renderAdminView();
+      return;
+    }
+
+    if (target.dataset.adminSummaryTab) {
+      ADMIN_UI_STATE.tab = target.dataset.adminSummaryTab;
+      renderAdminView();
+      return;
+    }
+
+    if (target.dataset.closeAdminModal !== undefined) {
+      closeAdminModal();
+      return;
+    }
+
+    if (target.dataset.openLetterFromReport) {
+      openAdminLetterModal(target.dataset.openLetterFromReport);
+      return;
+    }
+
+    const action = target.dataset.adminAction;
+    const letterId = target.dataset.letterId;
+    const reportId = target.dataset.reportId;
+    handleAdminAction(action, letterId, reportId);
+  });
+}
+
+function bindAdminTabsAndFilters() {
+  const search = document.querySelector('#admin-letter-search');
+  const spoiler = document.querySelector('#admin-filter-spoiler');
+  const genre = document.querySelector('#admin-filter-genre');
+  const report = document.querySelector('#admin-filter-report');
+  const date = document.querySelector('#admin-filter-date');
+  const userSearch = document.querySelector('#admin-user-search');
+
+  search.value = ADMIN_UI_STATE.query;
+  spoiler.value = ADMIN_UI_STATE.spoiler;
+  report.value = ADMIN_UI_STATE.report;
+  date.value = ADMIN_UI_STATE.date;
+
+  search.oninput = () => {
+    ADMIN_UI_STATE.query = search.value;
+    renderAdminView();
+  };
+
+  spoiler.onchange = () => {
+    ADMIN_UI_STATE.spoiler = spoiler.value;
+    renderAdminView();
+  };
+
+  genre.onchange = () => {
+    ADMIN_UI_STATE.genre = genre.value;
+    renderAdminView();
+  };
+
+  report.onchange = () => {
+    ADMIN_UI_STATE.report = report.value;
+    renderAdminView();
+  };
+
+  date.onchange = () => {
+    ADMIN_UI_STATE.date = date.value;
+    renderAdminView();
+  };
+
+  userSearch.oninput = () => {
+    renderAdminUsers(userSearch.value);
+  };
+
+  const genres = [...new Set(loadLetters().map((l) => l.genre).filter(Boolean))];
+  const options = ['<option value="all">ジャンル: すべて</option>']
+    .concat(genres.map((g) => `<option value="${escapeHtml(g)}">ジャンル: ${escapeHtml(g)}</option>`));
+  genre.innerHTML = options.join('');
+  genre.value = ADMIN_UI_STATE.genre;
+}
+
+function renderAdminView() {
+  renderAdminStats();
+  renderAdminTabs();
+  renderAdminLetters();
+  renderAdminReports();
+  renderAdminUsers(document.querySelector('#admin-user-search')?.value || '');
+}
+
+function renderAdminTabs() {
+  const tab = ADMIN_UI_STATE.tab;
+  document.querySelectorAll('.admin-tab').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.adminTab === tab);
+  });
+
+  const lettersPanel = document.querySelector('[data-admin-panel="letters"]');
+  const reportsPanel = document.querySelector('[data-admin-panel="reports"]');
+  const usersPanel = document.querySelector('[data-admin-panel="users"]');
+  const settingsPanel = document.querySelector('[data-admin-panel="settings"]');
+  const heading = document.querySelector('#admin-letters-heading');
+
+  const isLetterTab = Object.values(LETTER_STATUS).includes(tab);
+  lettersPanel.hidden = !isLetterTab;
+  reportsPanel.hidden = tab !== 'reports';
+  usersPanel.hidden = tab !== 'users';
+  settingsPanel.hidden = tab !== 'settings';
+  if (heading && isLetterTab) {
+    heading.textContent = `${STATUS_LABEL[tab]}の手紙`;
+  }
 }
 
 function renderAdminStats() {
   const stats = document.querySelector('#admin-stats');
   const letters = loadLetters();
   const reports = loadReports();
-  const users = loadUsers();
-
-  const pendingCount = letters.filter((letter) => letter.moderationStatus === 'pending').length;
-  const replyCount = letters.filter((letter) => letter.type === 'replyBookLetter').length;
-
-  // ユーザー関連統計
-  const usersWhoWrote = new Set(letters.filter((l) => l.currentUserId).map((l) => l.currentUserId));
-  const usersWhoReplied = new Set(letters.filter((l) => l.type === 'replyBookLetter' && l.currentUserId).map((l) => l.currentUserId));
-  const usersWhoReported = new Set(reports.filter((r) => r.currentUserId).map((r) => r.currentUserId));
+  const openReportLetterIds = new Set(reports.filter((r) => r.status !== 'resolved').map((r) => r.letterId));
 
   stats.innerHTML = `
-    <article class="stat-card"><h2>${letters.length}</h2><p>投稿された手紙</p></article>
-    <article class="stat-card"><h2>${pendingCount}</h2><p>未確認の手紙</p></article>
-    <article class="stat-card"><h2>${reports.length}</h2><p>相談の件数</p></article>
-    <article class="stat-card"><h2>${replyCount}</h2><p>一冊の本の手紙</p></article>
-    <article class="stat-card"><h2>${users.length}</h2><p>利用者数</p></article>
-    <article class="stat-card"><h2>${usersWhoWrote.size}</h2><p>手紙を書いた利用者</p></article>
-    <article class="stat-card"><h2>${usersWhoReplied.size}</h2><p>一冊の本を送った利用者</p></article>
-    <article class="stat-card"><h2>${usersWhoReported.size}</h2><p>相談した利用者</p></article>
+    <article class="stat-card" data-admin-summary-tab="pending"><h2>${letters.filter((l) => l.status === LETTER_STATUS.pending).length}</h2><p>未確認の手紙</p></article>
+    <article class="stat-card" data-admin-summary-tab="published"><h2>${letters.filter((l) => l.status === LETTER_STATUS.published).length}</h2><p>公開中の手紙</p></article>
+    <article class="stat-card" data-admin-summary-tab="onHold"><h2>${letters.filter((l) => l.status === LETTER_STATUS.onHold).length}</h2><p>保留中の手紙</p></article>
+    <article class="stat-card" data-admin-summary-tab="private"><h2>${letters.filter((l) => l.status === LETTER_STATUS.private).length}</h2><p>非公開の手紙</p></article>
+    <article class="stat-card" data-admin-summary-tab="deleted"><h2>${letters.filter((l) => l.status === LETTER_STATUS.deleted).length}</h2><p>削除済みの手紙</p></article>
+    <article class="stat-card" data-admin-summary-tab="reports"><h2>${openReportLetterIds.size}</h2><p>相談ありの手紙</p></article>
   `;
 }
 
 function renderAdminLetters() {
   const el = document.querySelector('#admin-letters');
-  const letters = loadLetters();
+  if (!el) return;
+
+  const letters = getFilteredLettersByAdminState();
+  const reports = loadReports();
+  const reportByLetter = new Map();
+  reports.forEach((report) => {
+    if (!reportByLetter.has(report.letterId)) {
+      reportByLetter.set(report.letterId, []);
+    }
+    reportByLetter.get(report.letterId).push(report);
+  });
 
   if (!letters.length) {
-    el.innerHTML = '<div class="empty">投稿された手紙はありません。</div>';
+    el.innerHTML = '<div class="empty">条件に一致する手紙はありません。</div>';
     return;
   }
 
-  el.innerHTML = letters.map((letter) => adminLetterCard(letter)).join('');
-
-  el.querySelectorAll('[data-letter-action]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const lettersData = loadLetters().map((letter) => {
-        if (letter.id !== btn.dataset.letterId) {
-          return letter;
-        }
-        return { ...letter, moderationStatus: btn.dataset.letterAction };
-      });
-      saveLetters(lettersData);
-      render('admin');
-    });
-  });
-
-  el.querySelectorAll('[data-consultation-action]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const lettersData = loadLetters().map((letter) => {
-        if (letter.id !== btn.dataset.letterId) {
-          return letter;
-        }
-        return { ...letter, consultationStatus: 'resolved' };
-      });
-      saveLetters(lettersData);
-      render('admin');
-    });
-  });
-
-  el.querySelectorAll('[data-toggle-detail]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const target = document.querySelector(`#detail-${btn.dataset.toggleDetail}`);
-      const expanded = btn.getAttribute('aria-expanded') === 'true';
-      btn.setAttribute('aria-expanded', String(!expanded));
-      btn.textContent = expanded ? '詳細を開く' : '詳細を閉じる';
-      target.hidden = expanded;
-    });
-  });
+  el.innerHTML = letters.map((letter) => adminLetterCard(letter, reportByLetter.get(letter.id) || [])).join('');
 }
 
-function adminLetterCard(letter) {
+function adminLetterCard(letter, reports = []) {
   const summary = trimText(letter.body, 120);
   const typeLabel = letter.type === 'replyBookLetter' ? '一冊の本の手紙' : '通常の手紙';
-  const consultation = letter.consultationStatus === 'resolved' ? '相談対応済み' : '相談未対応';
+  const hasReports = reports.length > 0;
+  const openReports = reports.filter((r) => r.status !== 'resolved').length;
+  const status = letter.status || LETTER_STATUS.pending;
 
-  return `<article class="ops-card">
-    <p class="eyebrow">${typeLabel} / ${deliveryStatusLabel(letter)}</p>
-    <h3>${escapeHtml(letter.letterTitle)}</h3>
+  return `<article class="ops-card admin-letter-card admin-status-${status}">
+    <div class="admin-letter-head">
+      <p class="eyebrow">${typeLabel}</p>
+      <div class="admin-badges">
+        <span class="pill admin-status-pill admin-status-${status}">${STATUS_LABEL[status]}</span>
+        ${hasReports ? `<span class="pill admin-report-pill">相談あり${openReports ? ` (${openReports})` : ''}</span>` : ''}
+      </div>
+    </div>
+    <h3>${escapeHtml(letter.letterTitle || 'タイトルなし')}</h3>
     <p><strong>差出人名：</strong>${escapeHtml(letter.senderName)}</p>
     <p><strong>利用者：</strong>${letter.currentUsername ? `${escapeHtml(letter.currentUsername)} / ${escapeHtml(letter.currentUserId)}` : '（記録なし）'}</p>
     <p><strong>宛先名：</strong>${escapeHtml(letter.recipientName || '指定なし')}</p>
-    <p><strong>元になった手紙ID：</strong>${escapeHtml(letter.parentLetterId || 'なし')}</p>
     <p><strong>本のタイトル：</strong>${escapeHtml(letter.bookTitle)} ／ <strong>著者名：</strong>${escapeHtml(letter.author)}</p>
+    ${letter.parentLetterId ? `<p><strong>元になった手紙ID：</strong>${escapeHtml(letter.parentLetterId)}</p>` : ''}
     <p class="hint">${escapeHtml(summary)}</p>
     <div class="meta">
       ${letter.type === 'normalLetter' ? `<span class="pill">ジャンル：${escapeHtml(letter.genre || '未設定')}</span>` : ''}
       <span class="pill">ネタバレ：${letter.type === 'replyBookLetter' ? (letter.spoiler ? 'あり' : 'なし') : escapeHtml(letter.spoiler || 'なし')}</span>
-      <span class="pill">${consultation}</span>
+      ${letter.mood ? `<span class="pill">気分：${escapeHtml(letter.mood)}</span>` : ''}
       <span class="pill">投稿：${formatDate(letter.createdAt)}</span>
+      ${letter.publishedAt ? `<span class="pill">公開：${formatDate(letter.publishedAt)}</span>` : ''}
+      ${letter.heldAt ? `<span class="pill">保留：${formatDate(letter.heldAt)}</span>` : ''}
+      ${letter.privateAt ? `<span class="pill">非公開：${formatDate(letter.privateAt)}</span>` : ''}
+      ${letter.deletedAt ? `<span class="pill">削除：${formatDate(letter.deletedAt)}</span>` : ''}
     </div>
+    ${letter.holdReason ? `<p class="hint"><strong>保留理由：</strong>${escapeHtml(letter.holdReason)}</p>` : ''}
+    ${letter.deleteReason ? `<p class="hint"><strong>削除理由：</strong>${escapeHtml(letter.deleteReason)}</p>` : ''}
     <div class="actions">
-      <button class="small-btn" data-toggle-detail="${letter.id}" aria-expanded="false">詳細を開く</button>
-      <button class="small-btn" data-letter-id="${letter.id}" data-letter-action="reviewed">目を通した</button>
-      <button class="small-btn" data-letter-id="${letter.id}" data-letter-action="deliverable">配達できます</button>
-      <button class="small-btn" data-letter-id="${letter.id}" data-letter-action="sealed">封を閉じる</button>
-      ${letter.type === 'replyBookLetter' ? `<button class="small-btn" data-letter-id="${letter.id}" data-consultation-action="resolved">相談対応済み</button>` : ''}
-    </div>
-    <div class="admin-detail" id="detail-${letter.id}" hidden>
-      <h4>手紙詳細</h4>
-      <p><strong>種別：</strong>${typeLabel}</p>
-      <p><strong>差出人名：</strong>${escapeHtml(letter.senderName)}</p>
-      <p><strong>宛先名：</strong>${escapeHtml(letter.recipientName || '指定なし')}</p>
-      <p><strong>元になった手紙ID：</strong>${escapeHtml(letter.parentLetterId || 'なし')}</p>
-      <p><strong>本のタイトル：</strong>${escapeHtml(letter.bookTitle)}</p>
-      <p><strong>著者名：</strong>${escapeHtml(letter.author)}</p>
-      <p><strong>投稿日時：</strong>${formatDate(letter.createdAt)}</p>
-      <p><strong>ステータス：</strong>${deliveryStatusLabel(letter)}</p>
-      ${letter.type === 'replyBookLetter' ? `<p><strong>この本を選んだ理由：</strong>${escapeHtml(letter.reason)}</p>` : ''}
-      ${letter.type === 'replyBookLetter' ? `<p><strong>あなたへ：</strong>${escapeHtml(letter.message)}</p>` : ''}
-      <div class="letter-body">${escapeHtml(letter.body)}</div>
+      <button class="small-btn" data-admin-action="view" data-letter-id="${letter.id}">全文を見る</button>
+      ${status !== LETTER_STATUS.published && status !== LETTER_STATUS.deleted ? `<button class="small-btn admin-action-publish" data-admin-action="publish" data-letter-id="${letter.id}">公開する</button>` : ''}
+      ${status === LETTER_STATUS.published ? `<button class="small-btn admin-action-private" data-admin-action="private" data-letter-id="${letter.id}">非公開にする</button>` : ''}
+      ${(status === LETTER_STATUS.pending || status === LETTER_STATUS.published) ? `<button class="small-btn admin-action-hold" data-admin-action="hold" data-letter-id="${letter.id}">保留する</button>` : ''}
+      ${(status === LETTER_STATUS.onHold || status === LETTER_STATUS.private) ? `<button class="small-btn admin-action-publish" data-admin-action="publish" data-letter-id="${letter.id}">公開する</button>` : ''}
+      ${status === LETTER_STATUS.deleted ? `<button class="small-btn admin-action-restore" data-admin-action="restore" data-letter-id="${letter.id}">復元する</button>` : ''}
+      ${status === LETTER_STATUS.deleted
+        ? `<button class="small-btn admin-action-hard-delete" data-admin-action="hard-delete" data-letter-id="${letter.id}">完全に削除する</button>`
+        : `<button class="small-btn admin-action-delete" data-admin-action="delete" data-letter-id="${letter.id}">削除する</button>`}
     </div>
   </article>`;
 }
 
-function deliveryStatusLabel(letter) {
-  if (letter.opened) {
-    return '配達済み';
-  }
-
-  const map = {
-    pending: '未確認',
-    reviewed: '目を通した',
-    deliverable: '配達できます',
-    sealed: '封を閉じています',
-  };
-
-  return map[letter.moderationStatus] || '未確認';
-}
-
 function renderAdminReports() {
   const el = document.querySelector('#admin-reports');
+  if (!el) return;
+
   const reports = loadReports();
   const letters = loadLetters();
 
@@ -992,28 +1099,21 @@ function renderAdminReports() {
       <h3>相談された手紙：${escapeHtml(linkedLetter?.letterTitle || '手紙情報なし')}</h3>
       <p><strong>相談した利用者：</strong>${report.currentUsername ? `${escapeHtml(report.currentUsername)} / ${escapeHtml(report.currentUserId)}` : '（記録なし）'}</p>
       <p><strong>種別：</strong>${escapeHtml(linkedLetter?.type === 'replyBookLetter' ? '一冊の本の手紙' : '通常の手紙')}</p>
+      <p><strong>現在ステータス：</strong>${linkedLetter ? STATUS_LABEL[linkedLetter.status] : '不明'}</p>
       <p><strong>差出人名：</strong>${escapeHtml(linkedLetter?.senderName || '不明')}</p>
       <p><strong>宛先名：</strong>${escapeHtml(linkedLetter?.recipientName || '指定なし')}</p>
       <p><strong>相談理由：</strong>${escapeHtml(report.reason)}</p>
       <p><strong>相談本文：</strong>${escapeHtml(report.content || '記載なし')}</p>
       <p class="hint">相談日時：${formatDate(report.createdAt)}</p>
       <div class="actions">
-        <button class="small-btn" data-resolve-report="${report.id}">対応済みにする</button>
+        ${linkedLetter ? `<button class="small-btn" data-open-letter-from-report="${linkedLetter.id}">対象の手紙を開く</button>` : ''}
+        <button class="small-btn" data-admin-action="resolve-report" data-report-id="${report.id}">対応済みにする</button>
+        ${linkedLetter ? `<button class="small-btn admin-action-hold" data-admin-action="report-hold" data-letter-id="${linkedLetter.id}" data-report-id="${report.id}">対象を保留にする</button>` : ''}
+        ${linkedLetter ? `<button class="small-btn admin-action-private" data-admin-action="report-private" data-letter-id="${linkedLetter.id}" data-report-id="${report.id}">対象を非公開にする</button>` : ''}
+        ${linkedLetter ? `<button class="small-btn admin-action-delete" data-admin-action="report-delete" data-letter-id="${linkedLetter.id}" data-report-id="${report.id}">対象を削除する</button>` : ''}
       </div>
     </article>`;
   }).join('');
-
-  el.querySelectorAll('[data-resolve-report]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const updated = loadReports().map((report) => (
-        report.id === btn.dataset.resolveReport
-          ? { ...report, status: 'resolved', resolvedAt: new Date().toISOString() }
-          : report
-      ));
-      saveReports(updated);
-      render('admin');
-    });
-  });
 }
 
 function renderAdminUsers(filterQuery = '') {
@@ -1029,13 +1129,6 @@ function renderAdminUsers(filterQuery = '') {
   const filtered = query
     ? users.filter((u) => u.username.toLowerCase().includes(query))
     : users;
-
-  // 検索フィールドのバインド（初回のみ）
-  const searchInput = document.querySelector('#admin-user-search');
-  if (searchInput && !searchInput.dataset.bound) {
-    searchInput.dataset.bound = '1';
-    searchInput.addEventListener('input', () => renderAdminUsers(searchInput.value));
-  }
 
   if (!filtered.length) {
     el.innerHTML = '<div class="empty">利用者はまだいません。</div>';
@@ -1066,6 +1159,224 @@ function renderAdminUsers(filterQuery = '') {
       </div>
     </article>`;
   }).join('');
+}
+
+function getFilteredLettersByAdminState() {
+  const letters = loadLetters();
+  const reports = loadReports();
+  const reportLetterIds = new Set(reports.map((r) => r.letterId));
+  const query = ADMIN_UI_STATE.query.trim().toLowerCase();
+
+  return letters
+    .filter((letter) => letter.status === ADMIN_UI_STATE.tab)
+    .filter((letter) => {
+      if (!query) return true;
+      const text = [
+        letter.letterTitle,
+        letter.bookTitle,
+        letter.author,
+        letter.senderName,
+        letter.currentUsername,
+        letter.body,
+      ].join(' ').toLowerCase();
+      return text.includes(query);
+    })
+    .filter((letter) => {
+      if (ADMIN_UI_STATE.spoiler === 'all') return true;
+      const spoiler = letter.type === 'replyBookLetter' ? (letter.spoiler ? 'あり' : 'なし') : String(letter.spoiler || 'なし');
+      return spoiler === ADMIN_UI_STATE.spoiler;
+    })
+    .filter((letter) => ADMIN_UI_STATE.genre === 'all' || String(letter.genre || '') === ADMIN_UI_STATE.genre)
+    .filter((letter) => {
+      if (ADMIN_UI_STATE.report === 'all') return true;
+      const hasReport = reportLetterIds.has(letter.id);
+      return ADMIN_UI_STATE.report === 'yes' ? hasReport : !hasReport;
+    })
+    .filter((letter) => {
+      if (ADMIN_UI_STATE.date === 'all') return true;
+      const created = new Date(letter.createdAt).getTime();
+      const now = Date.now();
+      if (ADMIN_UI_STATE.date === 'today') {
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        return created >= start.getTime();
+      }
+      if (ADMIN_UI_STATE.date === '7d') return created >= now - (7 * 24 * 60 * 60 * 1000);
+      if (ADMIN_UI_STATE.date === '30d') return created >= now - (30 * 24 * 60 * 60 * 1000);
+      return true;
+    });
+}
+
+function moderationStatusFromStatus(status) {
+  if (status === LETTER_STATUS.published) return 'deliverable';
+  if (status === LETTER_STATUS.private || status === LETTER_STATUS.deleted) return 'sealed';
+  return 'pending';
+}
+
+function appendOperationHistory(letter, action, label) {
+  const history = Array.isArray(letter.operationHistory) ? [...letter.operationHistory] : [];
+  history.unshift({ action, label, at: new Date().toISOString() });
+  return history;
+}
+
+function updateLetterStatus(letter, nextStatus, extra = {}) {
+  const patch = {
+    status: nextStatus,
+    moderationStatus: moderationStatusFromStatus(nextStatus),
+    operationHistory: appendOperationHistory(letter, nextStatus, STATUS_LABEL[nextStatus] || nextStatus),
+    ...extra,
+  };
+
+  if (nextStatus === LETTER_STATUS.published) patch.publishedAt = new Date().toISOString();
+  if (nextStatus === LETTER_STATUS.onHold) patch.heldAt = new Date().toISOString();
+  if (nextStatus === LETTER_STATUS.private) patch.privateAt = new Date().toISOString();
+  if (nextStatus === LETTER_STATUS.deleted) patch.deletedAt = new Date().toISOString();
+
+  return { ...letter, ...patch };
+}
+
+function handleAdminAction(action, letterId, reportId) {
+  if (action === 'view') {
+    openAdminLetterModal(letterId);
+    return;
+  }
+
+  if (action === 'resolve-report') {
+    const updated = loadReports().map((r) => (r.id === reportId ? { ...r, status: 'resolved', resolvedAt: new Date().toISOString() } : r));
+    saveReports(updated);
+    showAdminToast('相談対応を更新しました。');
+    renderAdminView();
+    return;
+  }
+
+  if (!letterId) {
+    return;
+  }
+
+  const letters = loadLetters();
+  const index = letters.findIndex((l) => l.id === letterId);
+  if (index < 0) return;
+  const target = letters[index];
+
+  const commit = (updatedLetter, toastMessage, moveTab = true) => {
+    letters[index] = updatedLetter;
+    saveLetters(letters);
+    if (moveTab && Object.values(LETTER_STATUS).includes(updatedLetter.status)) {
+      ADMIN_UI_STATE.tab = updatedLetter.status;
+    }
+    if (reportId) {
+      const updatedReports = loadReports().map((r) => (r.id === reportId ? { ...r, status: 'resolved', resolvedAt: new Date().toISOString() } : r));
+      saveReports(updatedReports);
+    }
+    closeAdminModal();
+    showAdminToast(toastMessage);
+    renderAdminView();
+  };
+
+  if (action === 'publish') {
+    commit(updateLetterStatus(target, LETTER_STATUS.published, { holdReason: '' }), '手紙を公開しました。');
+    return;
+  }
+
+  if (action === 'hold' || action === 'report-hold') {
+    const reason = prompt('保留理由（任意）を入力してください。', target.holdReason || '');
+    if (reason === null) return;
+    commit(updateLetterStatus(target, LETTER_STATUS.onHold, { holdReason: String(reason || '').trim() }), '手紙を保留にしました。');
+    return;
+  }
+
+  if (action === 'private' || action === 'report-private') {
+    if (!confirm('この手紙を非公開にしますか？\n一般画面には表示されなくなります。')) return;
+    commit(updateLetterStatus(target, LETTER_STATUS.private), '手紙を非公開にしました。');
+    return;
+  }
+
+  if (action === 'delete' || action === 'report-delete') {
+    const ok = confirm('この手紙を削除しますか？\n削除すると、一般画面には表示されなくなります。\nこの操作はあとから取り消せない可能性があります。');
+    if (!ok) return;
+    const reason = prompt('削除理由（任意）を入力してください。', target.deleteReason || '');
+    if (reason === null) return;
+    commit(updateLetterStatus(target, LETTER_STATUS.deleted, { deleteReason: String(reason || '').trim() }), '手紙を削除しました。');
+    return;
+  }
+
+  if (action === 'restore') {
+    if (!confirm('削除済みの手紙を復元しますか？')) return;
+    const restored = updateLetterStatus(target, LETTER_STATUS.pending, { deletedAt: null });
+    commit(restored, '手紙を復元しました。');
+    return;
+  }
+
+  if (action === 'hard-delete') {
+    const ok = confirm('この手紙を完全に削除します。\nこの操作は元に戻せません。\n本当に削除しますか？');
+    if (!ok) return;
+    const remained = letters.filter((l) => l.id !== letterId);
+    saveLetters(remained);
+    setData(STORAGE_KEYS.received, getData(STORAGE_KEYS.received, []).filter((l) => l.id !== letterId));
+    saveReports(loadReports().filter((r) => r.letterId !== letterId));
+    closeAdminModal();
+    showAdminToast('手紙を完全に削除しました。');
+    renderAdminView();
+  }
+}
+
+function openAdminLetterModal(letterId) {
+  const modal = document.querySelector('#admin-letter-modal');
+  const body = document.querySelector('#admin-letter-modal-body');
+  const letter = loadLetters().find((l) => l.id === letterId);
+  if (!modal || !body || !letter) return;
+
+  const reports = loadReports().filter((r) => r.letterId === letter.id);
+  body.innerHTML = `<article class="ops-card admin-modal-content">
+    <p class="eyebrow">${STATUS_LABEL[letter.status] || '未確認'}</p>
+    <h2>${escapeHtml(letter.letterTitle || 'タイトルなし')}</h2>
+    <p><strong>本のタイトル：</strong>${escapeHtml(letter.bookTitle)}</p>
+    <p><strong>著者名：</strong>${escapeHtml(letter.author)}</p>
+    <p><strong>差出人名：</strong>${escapeHtml(letter.senderName)}</p>
+    <p><strong>ユーザー：</strong>${letter.currentUsername ? `${escapeHtml(letter.currentUsername)} / ${escapeHtml(letter.currentUserId)}` : '（記録なし）'}</p>
+    <p><strong>投稿日時：</strong>${formatDate(letter.createdAt)}</p>
+    <p><strong>ネタバレ：</strong>${letter.type === 'replyBookLetter' ? (letter.spoiler ? 'あり' : 'なし') : escapeHtml(letter.spoiler || 'なし')}</p>
+    <p><strong>ジャンル：</strong>${escapeHtml(letter.genre || '未設定')}</p>
+    <p><strong>気分タグ：</strong>${escapeHtml(letter.mood || letter.moodTags?.join('／') || 'なし')}</p>
+    <p><strong>相談／通報：</strong>${reports.length ? `${reports.length}件` : 'なし'}</p>
+    ${letter.holdReason ? `<p><strong>保留理由：</strong>${escapeHtml(letter.holdReason)}</p>` : ''}
+    ${letter.deleteReason ? `<p><strong>削除理由：</strong>${escapeHtml(letter.deleteReason)}</p>` : ''}
+    <div class="letter-body">${escapeHtml(letter.body)}</div>
+    <h3>操作履歴</h3>
+    <div class="admin-history">
+      ${(letter.operationHistory?.length
+        ? letter.operationHistory.map((h) => `<p>・${escapeHtml(h.label || h.action)}（${formatDate(h.at)}）</p>`).join('')
+        : '<p>履歴はまだありません。</p>')}
+    </div>
+    <div class="actions admin-modal-actions">
+      ${letter.status !== LETTER_STATUS.published && letter.status !== LETTER_STATUS.deleted ? `<button class="small-btn admin-action-publish" data-admin-action="publish" data-letter-id="${letter.id}">公開する</button>` : ''}
+      ${(letter.status === LETTER_STATUS.pending || letter.status === LETTER_STATUS.published) ? `<button class="small-btn admin-action-hold" data-admin-action="hold" data-letter-id="${letter.id}">保留する</button>` : ''}
+      ${letter.status === LETTER_STATUS.published ? `<button class="small-btn admin-action-private" data-admin-action="private" data-letter-id="${letter.id}">非公開にする</button>` : ''}
+      ${letter.status === LETTER_STATUS.deleted ? `<button class="small-btn admin-action-restore" data-admin-action="restore" data-letter-id="${letter.id}">復元する</button>` : ''}
+      ${letter.status === LETTER_STATUS.deleted
+        ? `<button class="small-btn admin-action-hard-delete" data-admin-action="hard-delete" data-letter-id="${letter.id}">完全に削除する</button>`
+        : `<button class="small-btn admin-action-delete" data-admin-action="delete" data-letter-id="${letter.id}">削除する</button>`}
+      <button class="ghost" data-close-admin-modal>閉じる</button>
+    </div>
+  </article>`;
+
+  modal.hidden = false;
+}
+
+function closeAdminModal() {
+  const modal = document.querySelector('#admin-letter-modal');
+  if (modal) modal.hidden = true;
+}
+
+function showAdminToast(message) {
+  const toast = document.querySelector('#admin-toast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add('is-show');
+  clearTimeout(showAdminToast.timer);
+  showAdminToast.timer = setTimeout(() => {
+    toast.classList.remove('is-show');
+  }, 2400);
 }
 
 function trimText(text, maxLength) {

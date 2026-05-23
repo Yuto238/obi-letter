@@ -325,33 +325,85 @@
           <p class="eyebrow">Operation room</p>
           <p class="section-code">ADMIN / DASHBOARD</p>
           <h1>運営室</h1>
-          <p class="hint">投稿された手紙と相談を確認し、配達状態を整えます。</p>
+          <p class="hint">公開・保留・非公開・削除を、判断しやすい流れで管理します。</p>
         </div>
         <button class="secondary" id="admin-logout">運営室を出る</button>
       </div>
 
       <section class="admin-stats" id="admin-stats"></section>
 
+      <section class="admin-panel">
+        <h2>手紙を探す</h2>
+        <div class="admin-filters">
+          <input id="admin-letter-search" type="text" placeholder="手紙タイトル、本のタイトル、差出人名で検索" />
+          <select id="admin-filter-spoiler">
+            <option value="all">ネタバレ: すべて</option>
+            <option value="なし">ネタバレ: なし</option>
+            <option value="あり">ネタバレ: あり</option>
+          </select>
+          <select id="admin-filter-genre">
+            <option value="all">ジャンル: すべて</option>
+          </select>
+          <select id="admin-filter-report">
+            <option value="all">相談: すべて</option>
+            <option value="yes">相談あり</option>
+            <option value="no">相談なし</option>
+          </select>
+          <select id="admin-filter-date">
+            <option value="all">投稿日: すべて</option>
+            <option value="today">投稿日: 今日</option>
+            <option value="7d">投稿日: 7日以内</option>
+            <option value="30d">投稿日: 30日以内</option>
+          </select>
+        </div>
+      </section>
+
+      <div class="admin-tabs" id="admin-tabs">
+        <button class="admin-tab" data-admin-tab="pending">未確認</button>
+        <button class="admin-tab" data-admin-tab="published">公開中</button>
+        <button class="admin-tab" data-admin-tab="onHold">保留中</button>
+        <button class="admin-tab" data-admin-tab="private">非公開</button>
+        <button class="admin-tab" data-admin-tab="deleted">削除済み</button>
+        <button class="admin-tab" data-admin-tab="reports">相談</button>
+        <button class="admin-tab" data-admin-tab="users">読み手たち</button>
+        <button class="admin-tab" data-admin-tab="settings">運営室設定</button>
+      </div>
+
       <div class="admin-stack">
-        <section class="admin-panel">
-          <h2>手紙一覧</h2>
+        <section class="admin-panel" data-admin-panel="letters">
+          <h2 id="admin-letters-heading">手紙一覧</h2>
           <div id="admin-letters"></div>
         </section>
 
-        <section class="admin-panel">
+        <section class="admin-panel" data-admin-panel="reports" hidden>
           <h2>相談一覧</h2>
           <div id="admin-reports"></div>
         </section>
 
-        <section class="admin-panel">
+        <section class="admin-panel" data-admin-panel="users" hidden>
           <h2>読み手たち</h2>
           <div class="admin-user-search">
             <input id="admin-user-search" type="text" placeholder="ユーザー名で検索" />
           </div>
           <div id="admin-users"></div>
         </section>
+
+        <section class="admin-panel" data-admin-panel="settings" hidden>
+          <h2>運営室設定</h2>
+          <p class="hint">デモデータの初期化など、環境操作を行います。</p>
+          <button class="danger" id="reset-demo">デモデータを初期化</button>
+        </section>
       </div>
-      <button class="danger" id="reset-demo">デモデータを初期化</button>
+
+      <div id="admin-toast" class="admin-toast" aria-live="polite"></div>
+
+      <div class="admin-modal" id="admin-letter-modal" hidden>
+        <div class="admin-modal-backdrop" data-close-admin-modal></div>
+        <div class="admin-modal-dialog">
+          <button class="ghost admin-modal-close" data-close-admin-modal>閉じる</button>
+          <div id="admin-letter-modal-body"></div>
+        </div>
+      </div>
     </section>
   </template>
 
