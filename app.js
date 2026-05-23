@@ -357,7 +357,7 @@ function bindCommonRoutes() {
 }
 
 function bindRevealEffects() {
-  const targets = document.querySelectorAll('#app .reveal, #app .feature-card, #app .step-card, #app .safety-card, #app .choice-card, #app .floating-envelope, #app .envelope, #app .ops-card, #app .stat-card, #app .notice');
+  const targets = document.querySelectorAll('#app .reveal, #app .feature-card, #app .step-card, #app .safety-card, #app .choice-card, #app .floating-envelope, #app .envelope, #app .bookstore-card');
   if (!targets.length) {
     return;
   }

@@ -1154,11 +1154,7 @@ h3 { margin: 0 0 .45rem; line-height: 1.25; }
 .choice-card,
 .bookstore-card,
 .floating-envelope,
-.envelope,
-.ops-card,
-.stat-card,
-.notice,
-.letter {
+.envelope {
   opacity: 0;
   transform: translateY(22px);
 }
@@ -1170,11 +1166,7 @@ h3 { margin: 0 0 .45rem; line-height: 1.25; }
 .choice-card.is-visible,
 .bookstore-card.is-visible,
 .floating-envelope.is-visible,
-.envelope.is-visible,
-.ops-card.is-visible,
-.stat-card.is-visible,
-.notice.is-visible,
-.letter.is-visible {
+.envelope.is-visible {
   opacity: 1;
   transform: translateY(0);
   transition: opacity .6s ease, transform .6s ease, box-shadow .2s ease, border-color .2s ease;
