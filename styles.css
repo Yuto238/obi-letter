@@ -979,21 +979,82 @@ h3 { margin: 0 0 .45rem; line-height: 1.25; }
 }
 
 .admin-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: .42rem;
   border: 1px solid rgba(216, 203, 184, .95);
   border-radius: 999px;
-  background: rgba(255, 249, 239, .9);
-  color: var(--color-muted);
-  padding: .42rem .85rem;
+  background: rgba(255, 249, 239, .95);
+  color: #433b33;
+  padding: .48rem .9rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .admin-tab.is-active {
-  background: var(--color-blue);
-  border-color: var(--color-blue);
+  background: #1f3a5f;
+  border-color: #1f3a5f;
   color: #fff;
+  box-shadow: 0 10px 20px rgba(31, 58, 95, .22), inset 0 -3px 0 rgba(255, 255, 255, .4);
+}
+
+.admin-tab.is-published-active {
+  background: #1f5c43;
+  border-color: #1f5c43;
+  box-shadow: 0 10px 20px rgba(31, 92, 67, .24), inset 0 -3px 0 rgba(255, 255, 255, .42);
+}
+
+.admin-tab-count {
+  display: inline-flex;
+  align-items: center;
+  padding: .2rem .42rem;
+  border-radius: 999px;
+  font-size: .74rem;
+  background: rgba(31, 58, 95, .11);
+  color: #1f3a5f;
+}
+
+.admin-tab.is-active .admin-tab-count {
+  background: rgba(255, 255, 255, .22);
+  color: #fff;
+}
+
+.admin-tab-state {
+  font-size: .72rem;
+  letter-spacing: .02em;
+  color: #fff;
+  padding: .16rem .42rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .2);
 }
 
 .admin-letter-card {
   border-left: 4px solid rgba(36, 33, 29, .15);
+}
+
+.admin-letters-count {
+  margin: 0 0 .85rem;
+  font-weight: 700;
+  color: #1f3a5f;
+}
+
+.admin-published-guide {
+  margin: 0 0 .95rem;
+  padding: .75rem .9rem;
+  border-radius: 12px;
+  border: 1px solid rgba(31, 92, 67, .35);
+  background: rgba(236, 247, 242, .92);
+  color: #184634;
+  font-size: .92rem;
+  line-height: 1.6;
+}
+
+.admin-empty-state h3 {
+  margin: 0 0 .45rem;
+}
+
+.admin-empty-state p {
+  margin: 0 0 .8rem;
 }
 
 .admin-letter-head {
@@ -1018,6 +1079,28 @@ h3 { margin: 0 0 .45rem; line-height: 1.25; }
 .admin-status-onHold { border-left-color: #a6862d; }
 .admin-status-private { border-left-color: #5f6b76; }
 .admin-status-deleted { border-left-color: #a53b33; }
+
+.admin-letter-card.admin-status-published {
+  background: linear-gradient(180deg, #255b45, #214f3d);
+  border-color: rgba(24, 58, 44, .95);
+  color: #f5fbf8;
+}
+
+.admin-letter-card.admin-status-published .hint {
+  color: rgba(240, 252, 246, .88);
+}
+
+.admin-letter-card.admin-status-published .pill {
+  border-color: rgba(236, 249, 243, .35);
+  background: rgba(236, 249, 243, .14);
+  color: #eef9f3;
+}
+
+.admin-letter-card.admin-status-published .admin-status-pill.admin-status-published {
+  color: #0f3526;
+  background: #e4f4eb;
+  border-color: #c8e8d7;
+}
 
 .admin-status-pill.admin-status-pending { color: #626262; }
 .admin-status-pill.admin-status-published { color: #2f7452; }

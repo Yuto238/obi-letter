@@ -45,6 +45,8 @@ const ADMIN_UI_STATE = {
 function normalizeLetterStatus(rawStatus, rawModerationStatus) {
   const status = String(rawStatus || '').trim();
   const moderationStatus = String(rawModerationStatus || '').trim();
+  const statusLower = status.toLowerCase();
+  const moderationStatusLower = moderationStatus.toLowerCase();
 
   // 新仕様の status はそのまま採用
   if (Object.values(LETTER_STATUS).includes(status)) {
@@ -52,16 +54,45 @@ function normalizeLetterStatus(rawStatus, rawModerationStatus) {
   }
 
   // 旧仕様の status 互換
-  if (status === 'deliverable') return LETTER_STATUS.published;
-  if (status === 'sealed') return LETTER_STATUS.private;
-  if (status === 'reviewed' || status === 'open') return LETTER_STATUS.pending;
+  if (['deliverable', 'approved', 'delivered', 'published'].includes(statusLower)) return LETTER_STATUS.published;
+  if (['公開中', '公開', '配達可能'].includes(status)) return LETTER_STATUS.published;
+  if (statusLower === 'sealed') return LETTER_STATUS.private;
+  if (statusLower === 'onhold' || status === '保留中') return LETTER_STATUS.onHold;
+  if (statusLower === 'deleted' || status === '削除済み') return LETTER_STATUS.deleted;
+  if (['reviewed', 'open', 'pending'].includes(statusLower) || status === '未確認') return LETTER_STATUS.pending;
 
   // moderationStatus から移行
-  if (moderationStatus === 'deliverable') return LETTER_STATUS.published;
-  if (moderationStatus === 'sealed') return LETTER_STATUS.private;
-  if (moderationStatus === 'reviewed' || moderationStatus === 'pending') return LETTER_STATUS.pending;
+  if (['deliverable', 'approved', 'delivered', 'published'].includes(moderationStatusLower)) return LETTER_STATUS.published;
+  if (['公開中', '公開', '配達可能'].includes(moderationStatus)) return LETTER_STATUS.published;
+  if (moderationStatusLower === 'sealed') return LETTER_STATUS.private;
+  if (moderationStatusLower === 'onhold' || moderationStatus === '保留中') return LETTER_STATUS.onHold;
+  if (moderationStatusLower === 'deleted' || moderationStatus === '削除済み') return LETTER_STATUS.deleted;
+  if (['reviewed', 'open', 'pending'].includes(moderationStatusLower) || moderationStatus === '未確認') return LETTER_STATUS.pending;
 
   return LETTER_STATUS.pending;
+}
+
+function getAdminStatusCounts() {
+  const letters = loadLetters();
+  const reports = loadReports();
+
+  return {
+    [LETTER_STATUS.pending]: letters.filter((l) => l.status === LETTER_STATUS.pending).length,
+    [LETTER_STATUS.published]: letters.filter((l) => l.status === LETTER_STATUS.published).length,
+    [LETTER_STATUS.onHold]: letters.filter((l) => l.status === LETTER_STATUS.onHold).length,
+    [LETTER_STATUS.private]: letters.filter((l) => l.status === LETTER_STATUS.private).length,
+    [LETTER_STATUS.deleted]: letters.filter((l) => l.status === LETTER_STATUS.deleted).length,
+    reports: new Set(reports.filter((r) => r.status !== 'resolved').map((r) => r.letterId)).size,
+    users: loadUsers().length,
+  };
+}
+
+function setAdminTab(nextTab) {
+  if (!nextTab) {
+    return;
+  }
+  ADMIN_UI_STATE.tab = nextTab;
+  renderAdminView();
 }
 
 const sampleLetters = [
@@ -908,14 +939,12 @@ function bindAdmin() {
     }
 
     if (target.dataset.adminTab) {
-      ADMIN_UI_STATE.tab = target.dataset.adminTab;
-      renderAdminView();
+      setAdminTab(target.dataset.adminTab);
       return;
     }
 
     if (target.dataset.adminSummaryTab) {
-      ADMIN_UI_STATE.tab = target.dataset.adminSummaryTab;
-      renderAdminView();
+      setAdminTab(target.dataset.adminSummaryTab);
       return;
     }
 
@@ -995,8 +1024,30 @@ function renderAdminView() {
 
 function renderAdminTabs() {
   const tab = ADMIN_UI_STATE.tab;
+  const counts = getAdminStatusCounts();
+  const tabLabelMap = {
+    [LETTER_STATUS.pending]: '未確認',
+    [LETTER_STATUS.published]: '公開中',
+    [LETTER_STATUS.onHold]: '保留中',
+    [LETTER_STATUS.private]: '非公開',
+    [LETTER_STATUS.deleted]: '削除済み',
+    reports: '相談',
+    users: '読み手たち',
+    settings: '運営室設定',
+  };
+
   document.querySelectorAll('.admin-tab').forEach((btn) => {
-    btn.classList.toggle('is-active', btn.dataset.adminTab === tab);
+    const tabName = btn.dataset.adminTab;
+    const isActive = tabName === tab;
+    const count = counts[tabName];
+    const tabLabel = tabLabelMap[tabName] || tabName;
+    const countHtml = Number.isFinite(count) ? `<span class="admin-tab-count">${count}件</span>` : '';
+    const stateHtml = isActive ? '<span class="admin-tab-state">表示中</span>' : '';
+
+    btn.classList.toggle('is-active', isActive);
+    btn.classList.toggle('is-published-active', isActive && tabName === LETTER_STATUS.published);
+    btn.setAttribute('aria-current', isActive ? 'page' : 'false');
+    btn.innerHTML = `<span class="admin-tab-label">${tabLabel}</span>${countHtml}${stateHtml}`;
   });
 
   const lettersPanel = document.querySelector('[data-admin-panel="letters"]');
@@ -1017,23 +1068,47 @@ function renderAdminTabs() {
 
 function renderAdminStats() {
   const stats = document.querySelector('#admin-stats');
-  const letters = loadLetters();
-  const reports = loadReports();
-  const openReportLetterIds = new Set(reports.filter((r) => r.status !== 'resolved').map((r) => r.letterId));
+  const counts = getAdminStatusCounts();
 
   stats.innerHTML = `
-    <article class="stat-card" data-admin-summary-tab="pending"><h2>${letters.filter((l) => l.status === LETTER_STATUS.pending).length}</h2><p>未確認の手紙</p></article>
-    <article class="stat-card" data-admin-summary-tab="published"><h2>${letters.filter((l) => l.status === LETTER_STATUS.published).length}</h2><p>公開中の手紙</p></article>
-    <article class="stat-card" data-admin-summary-tab="onHold"><h2>${letters.filter((l) => l.status === LETTER_STATUS.onHold).length}</h2><p>保留中の手紙</p></article>
-    <article class="stat-card" data-admin-summary-tab="private"><h2>${letters.filter((l) => l.status === LETTER_STATUS.private).length}</h2><p>非公開の手紙</p></article>
-    <article class="stat-card" data-admin-summary-tab="deleted"><h2>${letters.filter((l) => l.status === LETTER_STATUS.deleted).length}</h2><p>削除済みの手紙</p></article>
-    <article class="stat-card" data-admin-summary-tab="reports"><h2>${openReportLetterIds.size}</h2><p>相談ありの手紙</p></article>
+    <article class="stat-card" data-admin-summary-tab="pending"><h2>${counts[LETTER_STATUS.pending]}</h2><p>未確認の手紙</p></article>
+    <article class="stat-card" data-admin-summary-tab="published"><h2>${counts[LETTER_STATUS.published]}</h2><p>公開中の手紙</p></article>
+    <article class="stat-card" data-admin-summary-tab="onHold"><h2>${counts[LETTER_STATUS.onHold]}</h2><p>保留中の手紙</p></article>
+    <article class="stat-card" data-admin-summary-tab="private"><h2>${counts[LETTER_STATUS.private]}</h2><p>非公開の手紙</p></article>
+    <article class="stat-card" data-admin-summary-tab="deleted"><h2>${counts[LETTER_STATUS.deleted]}</h2><p>削除済みの手紙</p></article>
+    <article class="stat-card" data-admin-summary-tab="reports"><h2>${counts.reports}</h2><p>相談ありの手紙</p></article>
   `;
 }
 
 function renderAdminLetters() {
+  const tab = ADMIN_UI_STATE.tab;
   const el = document.querySelector('#admin-letters');
+  const heading = document.querySelector('#admin-letters-heading');
+  const description = document.querySelector('#admin-letters-description');
+  const countEl = document.querySelector('#admin-letters-count');
+  const guide = document.querySelector('#admin-published-guide');
   if (!el) return;
+
+  const allLetters = loadLetters();
+  const totalByTab = allLetters.filter((letter) => letter.status === tab).length;
+
+  if (heading && STATUS_LABEL[tab]) {
+    heading.textContent = `${STATUS_LABEL[tab]}の手紙`;
+  }
+
+  if (description) {
+    description.textContent = tab === LETTER_STATUS.published
+      ? '管理者が公開した手紙です。封筒棚やおまかせ便の対象になります。'
+      : `${STATUS_LABEL[tab] || '対象'}として管理している手紙です。`;
+  }
+
+  if (countEl) {
+    countEl.textContent = `${STATUS_LABEL[tab] || '対象'}：${totalByTab}件`;
+  }
+
+  if (guide) {
+    guide.hidden = tab !== LETTER_STATUS.published;
+  }
 
   const letters = getFilteredLettersByAdminState();
   const reports = loadReports();
@@ -1046,6 +1121,17 @@ function renderAdminLetters() {
   });
 
   if (!letters.length) {
+    if (tab === LETTER_STATUS.published && totalByTab === 0) {
+      el.innerHTML = `
+        <div class="empty admin-empty-state">
+          <h3>公開中の手紙はまだありません。</h3>
+          <p>未確認の手紙を確認し、「公開する」を押すと、ここに表示されます。</p>
+          <button class="secondary" data-admin-tab="pending">未確認の手紙を見る</button>
+        </div>
+      `;
+      return;
+    }
+
     el.innerHTML = '<div class="empty">条件に一致する手紙はありません。</div>';
     return;
   }
@@ -1059,6 +1145,9 @@ function adminLetterCard(letter, reports = []) {
   const hasReports = reports.length > 0;
   const openReports = reports.filter((r) => r.status !== 'resolved').length;
   const status = letter.status || LETTER_STATUS.pending;
+  const publishedAt = letter.publishedAt
+    ? formatDateForAdmin(letter.publishedAt)
+    : '未記録';
 
   return `<article class="ops-card admin-letter-card admin-status-${status}">
     <div class="admin-letter-head">
@@ -1079,8 +1168,8 @@ function adminLetterCard(letter, reports = []) {
       ${letter.type === 'normalLetter' ? `<span class="pill">ジャンル：${escapeHtml(letter.genre || '未設定')}</span>` : ''}
       <span class="pill">ネタバレ：${letter.type === 'replyBookLetter' ? (letter.spoiler ? 'あり' : 'なし') : escapeHtml(letter.spoiler || 'なし')}</span>
       ${letter.mood ? `<span class="pill">気分：${escapeHtml(letter.mood)}</span>` : ''}
-      <span class="pill">投稿：${formatDate(letter.createdAt)}</span>
-      ${letter.publishedAt ? `<span class="pill">公開：${formatDate(letter.publishedAt)}</span>` : ''}
+      <span class="pill">投稿：${formatDateForAdmin(letter.createdAt)}</span>
+      ${status === LETTER_STATUS.published ? `<span class="pill">公開日時：${publishedAt}</span>` : ''}
       ${letter.heldAt ? `<span class="pill">保留：${formatDate(letter.heldAt)}</span>` : ''}
       ${letter.privateAt ? `<span class="pill">非公開：${formatDate(letter.privateAt)}</span>` : ''}
       ${letter.deletedAt ? `<span class="pill">削除：${formatDate(letter.deletedAt)}</span>` : ''}
@@ -1091,7 +1180,7 @@ function adminLetterCard(letter, reports = []) {
       <button class="small-btn" data-admin-action="view" data-letter-id="${letter.id}">全文を見る</button>
       ${status !== LETTER_STATUS.published && status !== LETTER_STATUS.deleted ? `<button class="small-btn admin-action-publish" data-admin-action="publish" data-letter-id="${letter.id}">公開する</button>` : ''}
       ${status === LETTER_STATUS.published ? `<button class="small-btn admin-action-private" data-admin-action="private" data-letter-id="${letter.id}">非公開にする</button>` : ''}
-      ${(status === LETTER_STATUS.pending || status === LETTER_STATUS.published) ? `<button class="small-btn admin-action-hold" data-admin-action="hold" data-letter-id="${letter.id}">保留する</button>` : ''}
+      ${status === LETTER_STATUS.pending ? `<button class="small-btn admin-action-hold" data-admin-action="hold" data-letter-id="${letter.id}">保留する</button>` : ''}
       ${(status === LETTER_STATUS.onHold || status === LETTER_STATUS.private) ? `<button class="small-btn admin-action-publish" data-admin-action="publish" data-letter-id="${letter.id}">公開する</button>` : ''}
       ${status === LETTER_STATUS.deleted ? `<button class="small-btn admin-action-restore" data-admin-action="restore" data-letter-id="${letter.id}">復元する</button>` : ''}
       ${status === LETTER_STATUS.deleted
@@ -1413,6 +1502,24 @@ function formatDate(value) {
     return '日時不明';
   }
   return new Date(value).toLocaleString('ja-JP');
+}
+
+function formatDateForAdmin(value) {
+  if (!value) {
+    return '未記録';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '未記録';
+  }
+
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${y}.${m}.${d} ${hh}:${mm}`;
 }
 
 function escapeHtml(value = '') {
